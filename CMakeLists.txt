@@ -28,8 +28,6 @@ project(sdl3-gpu-minimal
 	DESCRIPTION "C++23 based Minimal SDL3 GPU Example.")
 
 #---------------------------------------------------------------------------------------
-
-#---------------------------------------------------------------------------------------
 # set platform specific configurations
 
 # Set Properties for Windows specific configurations
@@ -38,6 +36,10 @@ list(APPEND platform_definitions
 	NOMINMAX                    # Don't want Window.h to define min and max macros
 	WIN32_LEAN_AND_MEAN         # Windows.h should only include the basics
 )
+
+#---------------------------------------------------------------------------------------
+# Look for libraries we want to use for this project
+find_package(SDL3 CONFIG REQUIRED)
 
 #---------------------------------------------------------------------------------------
 # set application specific configurations
@@ -68,6 +70,7 @@ target_sources(${PRJ_APP_NAME}
 # libraries used by this application
 target_link_libraries(${PRJ_APP_NAME}
 	PRIVATE
+		SDL3::SDL3 # SDL library version 3.2
 )
 
 #---------------------------------------------------------------------------------------
