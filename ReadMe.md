@@ -11,3 +11,22 @@ External dependencies are managed via `vcpkg`. `SDL3` is consumed as an external
 `.clangd` to experiment with using clangd as lsp, it doesn't like modules.
 
 Windows only for the moment, but it shouldn't have issues compiling on linux with some tweaks.
+
+## Prerequisites
+Build Tools
+- CMake 3.31+
+- vcpkg
+- ninja 1.12+
+- Windows SDK & MSVC build tools
+- clang-tidy & clang-format
+
+
+## Configure and Build
+In project root, from VS command prompt
+```shell
+# to configure the project
+cmake --preset windows-default
+
+# to build the project
+cmake --build --preset windows-debug
+```
