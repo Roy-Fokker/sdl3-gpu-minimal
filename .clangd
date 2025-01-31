@@ -1,0 +1,5 @@
+CompileFlags:
+  Add: ["-std:c++latest", "-std=c++23", "--experimental-modules-support"]
+  CompilationDatabase: "./builds/windows-default"
+Index:
+  StandardLibrary: Yes
