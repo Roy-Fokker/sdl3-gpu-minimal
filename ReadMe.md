@@ -30,3 +30,10 @@ cmake --preset windows-default
 # to build the project
 cmake --build --preset windows-debug
 ```
+
+## Learning Progress
+- [Clear Screen](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/0-clear-screen): Clear window with specified color.
+- [Basic Triangle](#): Draw a simple colored triangle.
+
+## References
+- <https://github.com/TheSpydog/SDL_gpu_examples>
