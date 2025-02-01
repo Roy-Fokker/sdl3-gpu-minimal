@@ -195,11 +195,26 @@ namespace base
  */
 namespace frame
 {
+	// Deleter template, for use with SDL objects.
+	// Allows use of SDL Objects with C++'s smart pointers, using SDL's destroy function
+	template <auto fn>
+	struct sdl_gpu_deleter
+	{
+		SDL_GPUDevice *gpu = nullptr;
+
+		constexpr void operator()(auto *arg)
+		{
+			fn(gpu, arg);
+		}
+	};
+	using sdl_free_gfx_pipeline = sdl_gpu_deleter<SDL_ReleaseGPUGraphicsPipeline>;
+	using sdl_gfx_pipeline_ptr  = std::unique_ptr<SDL_GPUGraphicsPipeline, sdl_free_gfx_pipeline>;
+
 	// Structure to hold objects required to draw a frame
 	struct frame_context
 	{
-		SDL_GPUGraphicsPipeline *fill_pipeline = nullptr;
-		SDL_GPUGraphicsPipeline *line_pipeline = nullptr;
+		sdl_gfx_pipeline_ptr fill_pipeline = nullptr;
+		sdl_gfx_pipeline_ptr line_pipeline = nullptr;
 		SDL_GPUViewport small_viewport;
 		SDL_Rect small_scissor;
 
@@ -263,16 +278,19 @@ namespace frame
 			},
 		};
 
-		rndr.fill_pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
-		msg::error(rndr.fill_pipeline != nullptr, "Failed to create fill pipeline.");
+		auto fill_pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
+		msg::error(fill_pipeline != nullptr, "Failed to create fill pipeline.");
 
 		pipeline_info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_LINE;
 
-		rndr.line_pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
-		msg::error(rndr.line_pipeline != nullptr, "Failed to create line pipeline.");
+		auto line_pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
+		msg::error(line_pipeline != nullptr, "Failed to create line pipeline.");
 
 		SDL_ReleaseGPUShader(ctx.gpu.get(), vs_shdr);
 		SDL_ReleaseGPUShader(ctx.gpu.get(), fs_shdr);
+
+		rndr.fill_pipeline = sdl_gfx_pipeline_ptr(fill_pipeline, sdl_free_gfx_pipeline{ ctx.gpu.get() });
+		rndr.line_pipeline = sdl_gfx_pipeline_ptr(line_pipeline, sdl_free_gfx_pipeline{ ctx.gpu.get() });
 	}
 
 	void create_viewport_and_scissor(frame::frame_context &rndr)
@@ -292,12 +310,11 @@ namespace frame
 		return rndr;
 	}
 
-	void destroy(const base::sdl_context &ctx, frame_context &rndr)
+	void destroy([[maybe_unused]] const base::sdl_context &ctx, frame_context &rndr)
 	{
 		msg::info("Destroy frame objects");
 
-		SDL_ReleaseGPUGraphicsPipeline(ctx.gpu.get(), rndr.fill_pipeline);
-		SDL_ReleaseGPUGraphicsPipeline(ctx.gpu.get(), rndr.line_pipeline);
+		rndr = {};
 	}
 
 	// Get Swapchain Image/Texture, wait if none is available
@@ -363,7 +380,7 @@ namespace app
 	// Change active objects in render context based on application state
 	void update(frame::frame_context &rndr, const state &stt)
 	{
-		rndr.pipeline = stt.use_line_fill ? rndr.line_pipeline : rndr.fill_pipeline;
+		rndr.pipeline = stt.use_line_fill ? rndr.line_pipeline.get() : rndr.fill_pipeline.get();
 		rndr.viewport = stt.use_small_view ? &rndr.small_viewport : nullptr;
 		rndr.scissor  = stt.use_small_scissor ? &rndr.small_scissor : nullptr;
 	}
