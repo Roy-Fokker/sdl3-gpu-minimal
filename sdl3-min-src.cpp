@@ -197,6 +197,7 @@ namespace frame
 {
 	// Deleter template, for use with SDL objects.
 	// Allows use of SDL Objects with C++'s smart pointers, using SDL's destroy function
+	// This version needs pointer to GPU.
 	template <auto fn>
 	struct sdl_gpu_deleter
 	{
@@ -207,6 +208,7 @@ namespace frame
 			fn(gpu, arg);
 		}
 	};
+	// Typedefs for SDL objects that need GPU Device to properly destruct
 	using sdl_free_gfx_pipeline = sdl_gpu_deleter<SDL_ReleaseGPUGraphicsPipeline>;
 	using sdl_gfx_pipeline_ptr  = std::unique_ptr<SDL_GPUGraphicsPipeline, sdl_free_gfx_pipeline>;
 	using sdl_free_gfx_shader   = sdl_gpu_deleter<SDL_ReleaseGPUShader>;
@@ -226,6 +228,7 @@ namespace frame
 		SDL_Rect *scissor                 = nullptr;
 	};
 
+	// Create GPU side shader using in-memory shader binary for specified stage
 	auto load_gpu_shader(const base::sdl_context &ctx, const io::byte_span &bin, SDL_GPUShaderStage stage) -> sdl_gpu_shader_ptr
 	{
 		auto shader_format = [&]() -> SDL_GPUShaderFormat {
@@ -251,6 +254,7 @@ namespace frame
 		return sdl_gpu_shader_ptr(shader, sdl_free_gfx_shader{ ctx.gpu.get() });
 	}
 
+	// Create two pipelines with different fill modes, full and line.
 	void create_pipelines(const base::sdl_context &ctx, frame::frame_context &rndr)
 	{
 		msg::info("Creating Pipelines.");
@@ -292,12 +296,16 @@ namespace frame
 		rndr.line_pipeline = sdl_gfx_pipeline_ptr(line_pipeline, sdl_free_gfx_pipeline{ ctx.gpu.get() });
 	}
 
+	// Create small viewport and scissor objects.
+	// SDL seems to have default viewport and scissor, equal to window size.
+	// these override those, if used.
 	void create_viewport_and_scissor(frame::frame_context &rndr)
 	{
 		rndr.small_viewport = { 160, 120, 320, 240, 0.1f, 1.0f };
 		rndr.small_scissor  = { 320, 240, 320, 240 };
 	}
 
+	// Initialize all Frame objects
 	auto init(const base::sdl_context &ctx) -> frame_context
 	{
 		msg::info("Initialize frame objects");
@@ -309,14 +317,17 @@ namespace frame
 		return rndr;
 	}
 
+	// clean up frame objects
 	void destroy([[maybe_unused]] const base::sdl_context &ctx, frame_context &rndr)
 	{
 		msg::info("Destroy frame objects");
 
+		// must do this before calling SDL_Quit or freeing GPU device
 		rndr = {};
 	}
 
 	// Get Swapchain Image/Texture, wait if none is available
+	// Does not use smart pointer as lifetime of swapchain texture is managed by SDL
 	auto get_swapchain_texture(const base::sdl_context &ctx, SDL_GPUCommandBuffer *cmd_buf) -> SDL_GPUTexture *
 	{
 		auto sc_tex = (SDL_GPUTexture *)nullptr;
