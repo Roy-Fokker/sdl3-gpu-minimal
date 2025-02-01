@@ -301,7 +301,7 @@ namespace frame
 	}
 
 	// Get Swapchain Image/Texture, wait if none is available
-	auto get_swapchain_texture(base::sdl_context &ctx, SDL_GPUCommandBuffer *cmd_buf) -> SDL_GPUTexture *
+	auto get_swapchain_texture(const base::sdl_context &ctx, SDL_GPUCommandBuffer *cmd_buf) -> SDL_GPUTexture *
 	{
 		auto sc_tex = (SDL_GPUTexture *)nullptr;
 
@@ -313,7 +313,7 @@ namespace frame
 	}
 
 	// Draw to window using Command Buffer and Renderpass
-	void draw(base::sdl_context &ctx)
+	void draw(const base::sdl_context &ctx, const frame_context &rndr)
 	{
 		auto cmd_buf = SDL_AcquireGPUCommandBuffer(ctx.gpu.get());
 		msg::error(cmd_buf != nullptr, "Failed to acquire command buffer.");
