@@ -209,6 +209,8 @@ namespace frame
 	};
 	using sdl_free_gfx_pipeline = sdl_gpu_deleter<SDL_ReleaseGPUGraphicsPipeline>;
 	using sdl_gfx_pipeline_ptr  = std::unique_ptr<SDL_GPUGraphicsPipeline, sdl_free_gfx_pipeline>;
+	using sdl_free_gfx_shader   = sdl_gpu_deleter<SDL_ReleaseGPUShader>;
+	using sdl_gpu_shader_ptr    = std::unique_ptr<SDL_GPUShader, sdl_free_gfx_shader>;
 
 	// Structure to hold objects required to draw a frame
 	struct frame_context
@@ -224,7 +226,7 @@ namespace frame
 		SDL_Rect *scissor                 = nullptr;
 	};
 
-	auto load_gpu_shader(const base::sdl_context &ctx, const io::byte_span &bin, SDL_GPUShaderStage stage) -> SDL_GPUShader *
+	auto load_gpu_shader(const base::sdl_context &ctx, const io::byte_span &bin, SDL_GPUShaderStage stage) -> sdl_gpu_shader_ptr
 	{
 		auto shader_format = [&]() -> SDL_GPUShaderFormat {
 			auto backend_formats = SDL_GetGPUShaderFormats(ctx.gpu.get());
@@ -246,7 +248,7 @@ namespace frame
 		auto shader = SDL_CreateGPUShader(ctx.gpu.get(), &shader_info);
 		msg::error(shader != nullptr, "Failed to create shader.");
 
-		return shader;
+		return sdl_gpu_shader_ptr(shader, sdl_free_gfx_shader{ ctx.gpu.get() });
 	}
 
 	void create_pipelines(const base::sdl_context &ctx, frame::frame_context &rndr)
@@ -266,8 +268,8 @@ namespace frame
 		};
 
 		auto pipeline_info = SDL_GPUGraphicsPipelineCreateInfo{
-			.vertex_shader    = vs_shdr,
-			.fragment_shader  = fs_shdr,
+			.vertex_shader    = vs_shdr.get(),
+			.fragment_shader  = fs_shdr.get(),
 			.primitive_type   = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
 			.rasterizer_state = {
 			  .fill_mode = SDL_GPU_FILLMODE_FILL,
@@ -285,9 +287,6 @@ namespace frame
 
 		auto line_pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
 		msg::error(line_pipeline != nullptr, "Failed to create line pipeline.");
-
-		SDL_ReleaseGPUShader(ctx.gpu.get(), vs_shdr);
-		SDL_ReleaseGPUShader(ctx.gpu.get(), fs_shdr);
 
 		rndr.fill_pipeline = sdl_gfx_pipeline_ptr(fill_pipeline, sdl_free_gfx_pipeline{ ctx.gpu.get() });
 		rndr.line_pipeline = sdl_gfx_pipeline_ptr(line_pipeline, sdl_free_gfx_pipeline{ ctx.gpu.get() });
