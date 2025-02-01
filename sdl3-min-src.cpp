@@ -195,6 +195,111 @@ namespace base
  */
 namespace frame
 {
+	// Structure to hold objects required to draw a frame
+	struct frame_context
+	{
+		SDL_GPUGraphicsPipeline *fill_pipeline = nullptr;
+		SDL_GPUGraphicsPipeline *line_pipeline = nullptr;
+		SDL_GPUViewport small_viewport;
+		SDL_Rect small_scissor;
+
+		// Active pointers used by draw call
+		SDL_GPUGraphicsPipeline *pipeline = nullptr;
+		SDL_GPUViewport *viewport         = nullptr;
+		SDL_Rect *scissor                 = nullptr;
+	};
+
+	auto load_gpu_shader(const base::sdl_context &ctx, const io::byte_span &bin, SDL_GPUShaderStage stage) -> SDL_GPUShader *
+	{
+		auto shader_format = [&]() -> SDL_GPUShaderFormat {
+			auto backend_formats = SDL_GetGPUShaderFormats(ctx.gpu.get());
+
+			if (backend_formats & SDL_GPU_SHADERFORMAT_DXIL)
+				return SDL_GPU_SHADERFORMAT_DXIL;
+			else
+				return SDL_GPU_SHADERFORMAT_SPIRV;
+		}();
+
+		auto shader_info = SDL_GPUShaderCreateInfo{
+			.code_size  = bin.size(),
+			.code       = reinterpret_cast<const std::uint8_t *>(bin.data()),
+			.entrypoint = "main",
+			.format     = shader_format,
+			.stage      = stage,
+		};
+
+		auto shader = SDL_CreateGPUShader(ctx.gpu.get(), &shader_info);
+		msg::error(shader != nullptr, "Failed to create shader.");
+
+		return shader;
+	}
+
+	void create_pipelines(const base::sdl_context &ctx, frame::frame_context &rndr)
+	{
+		msg::info("Creating Pipelines.");
+
+		auto vs_bin = io::read_file("shaders/raw_triangle.vs_6_4.cso");
+		auto fs_bin = io::read_file("shaders/raw_triangle.ps_6_4.cso");
+
+		auto vs_shdr = load_gpu_shader(ctx, vs_bin, SDL_GPU_SHADERSTAGE_VERTEX);
+		auto fs_shdr = load_gpu_shader(ctx, fs_bin, SDL_GPU_SHADERSTAGE_FRAGMENT);
+
+		auto color_targets = std::array{
+			SDL_GPUColorTargetDescription{
+			  .format = SDL_GetGPUSwapchainTextureFormat(ctx.gpu.get(), ctx.window.get()),
+			}
+		};
+
+		auto pipeline_info = SDL_GPUGraphicsPipelineCreateInfo{
+			.vertex_shader    = vs_shdr,
+			.fragment_shader  = fs_shdr,
+			.primitive_type   = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+			.rasterizer_state = {
+			  .fill_mode = SDL_GPU_FILLMODE_FILL,
+			},
+			.target_info = {
+			  .color_target_descriptions = color_targets.data(),
+			  .num_color_targets         = static_cast<uint32_t>(color_targets.size()),
+			},
+		};
+
+		rndr.fill_pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
+		msg::error(rndr.fill_pipeline != nullptr, "Failed to create fill pipeline.");
+
+		pipeline_info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_LINE;
+
+		rndr.line_pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
+		msg::error(rndr.line_pipeline != nullptr, "Failed to create line pipeline.");
+
+		SDL_ReleaseGPUShader(ctx.gpu.get(), vs_shdr);
+		SDL_ReleaseGPUShader(ctx.gpu.get(), fs_shdr);
+	}
+
+	void create_viewport_and_scissor(frame::frame_context &rndr)
+	{
+		rndr.small_viewport = { 160, 120, 320, 240, 0.1f, 1.0f };
+		rndr.small_scissor  = { 320, 240, 320, 240 };
+	}
+
+	auto init(const base::sdl_context &ctx) -> frame_context
+	{
+		msg::info("Initialize frame objects");
+
+		auto rndr = frame_context{};
+		create_pipelines(ctx, rndr);
+		create_viewport_and_scissor(rndr);
+
+		return rndr;
+	}
+
+	void destroy(const base::sdl_context &ctx, frame_context &rndr)
+	{
+		msg::info("Destroy frame objects");
+
+		SDL_ReleaseGPUGraphicsPipeline(ctx.gpu.get(), rndr.fill_pipeline);
+		SDL_ReleaseGPUGraphicsPipeline(ctx.gpu.get(), rndr.line_pipeline);
+	}
+
 	// Get Swapchain Image/Texture, wait if none is available
 	auto get_swapchain_texture(base::sdl_context &ctx, SDL_GPUCommandBuffer *cmd_buf) -> SDL_GPUTexture *
 	{
@@ -223,9 +328,44 @@ namespace frame
 
 		auto renderpass = SDL_BeginGPURenderPass(cmd_buf, &color_target_info, 1, NULL);
 
+		SDL_BindGPUGraphicsPipeline(renderpass, rndr.pipeline);
+
+		if (rndr.viewport != nullptr)
+		{
+			SDL_SetGPUViewport(renderpass, rndr.viewport);
+		}
+
+		if (rndr.scissor != nullptr)
+		{
+			SDL_SetGPUScissor(renderpass, rndr.scissor);
+		}
+
+		SDL_DrawGPUPrimitives(renderpass, 3, 1, 0, 0);
+
 		SDL_EndGPURenderPass(renderpass);
 
 		SDL_SubmitGPUCommandBuffer(cmd_buf);
+	}
+}
+
+/*
+ * To manage application specific state data
+ */
+namespace app
+{
+	struct state
+	{
+		bool use_small_view    = false;
+		bool use_small_scissor = false;
+		bool use_line_fill     = false;
+	};
+
+	// Change active objects in render context based on application state
+	void update(frame::frame_context &rndr, const state &stt)
+	{
+		rndr.pipeline = stt.use_line_fill ? rndr.line_pipeline : rndr.fill_pipeline;
+		rndr.viewport = stt.use_small_view ? &rndr.small_viewport : nullptr;
+		rndr.scissor  = stt.use_small_scissor ? &rndr.small_scissor : nullptr;
 	}
 }
 
@@ -237,6 +377,9 @@ auto main() -> int
 
 	auto ctx = base::init(window_width, window_height, app_title);
 
+	auto rndr = frame::init(ctx);
+
+	auto stt  = app::state{};
 	auto quit = false;
 	auto evnt = SDL_Event{};
 	while (not quit)
@@ -247,10 +390,31 @@ auto main() -> int
 			{
 				quit = true;
 			}
+			else if (evnt.type == SDL_EVENT_KEY_DOWN)
+			{
+				switch (evnt.key.key)
+				{
+				case SDLK_1:
+					stt.use_line_fill = not stt.use_line_fill;
+					break;
+				case SDLK_2:
+					stt.use_small_view = not stt.use_small_view;
+					break;
+				case SDLK_3:
+					stt.use_small_scissor = not stt.use_small_scissor;
+					break;
+				default:
+					break;
+				}
+			}
 		}
 
-		frame::draw(ctx);
+		update(rndr, stt);
+
+		frame::draw(ctx, rndr);
 	}
+
+	frame::destroy(ctx, rndr);
 
 	base::destroy(ctx);
 
