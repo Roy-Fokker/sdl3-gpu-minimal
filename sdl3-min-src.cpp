@@ -113,6 +113,10 @@ namespace io
 		return { byte_start, byte_size };
 	}
 }
+
+/*
+ * SDL base objects initializations
+ */
 namespace base
 {
 	// Compilation mode
@@ -183,6 +187,9 @@ namespace base
 	}
 }
 
+/*
+ * SDL functions called every frame
+ */
 namespace frame
 {
 	// Get Swapchain Image/Texture, wait if none is available
