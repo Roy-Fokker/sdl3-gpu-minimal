@@ -75,11 +75,11 @@ namespace io
 	// Simple function to read a file in binary mode.
 	auto read_file(const std::filesystem::path &filename) -> std::vector<std::byte>
 	{
-		std::println("{}Reading file: {}{}", CLR::BBLU, filename.string(), CLR::RESET);
+		msg::info(std::format("Reading file: {}", filename.string()));
 
 		auto file = std::ifstream(filename, std::ios::in | std::ios::binary);
 
-		assert(file.good() and "failed to open file!");
+		msg::error(file.good(), "failed to open file!");
 
 		auto file_size = std::filesystem::file_size(filename);
 		auto buffer    = std::vector<std::byte>(file_size);
