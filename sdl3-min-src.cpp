@@ -9,6 +9,63 @@ import std;
 // literal suffixes for strings, string_view, etc
 using namespace std::literals;
 
+/*
+ * Get colored logging messages
+ */
+namespace msg
+{
+	namespace color
+	{
+		// Regular Colors
+		constexpr auto BLK = "\033[0;30m";
+		constexpr auto RED = "\033[0;31m";
+		constexpr auto GRN = "\033[0;32m";
+		constexpr auto YEL = "\033[0;33m";
+		constexpr auto BLU = "\033[0;34m";
+		constexpr auto MAG = "\033[0;35m";
+		constexpr auto CYN = "\033[0;36m";
+		constexpr auto WHT = "\033[0;37m";
+
+		// Bright/Bold Colors
+		constexpr auto BBLK = "\033[1;30m";
+		constexpr auto BRED = "\033[1;31m";
+		constexpr auto BGRN = "\033[1;32m";
+		constexpr auto BYEL = "\033[1;33m";
+		constexpr auto BBLU = "\033[1;34m";
+		constexpr auto BMAG = "\033[1;35m";
+		constexpr auto BCYN = "\033[1;36m";
+		constexpr auto BWHT = "\033[1;37m";
+
+		// Reset Color and Style
+		constexpr auto RESET = "\033[0m";
+	}
+
+	// if there is an error, print message then assert
+	void error(bool condition,
+	           const std::string_view message,
+	           const std::source_location location = std::source_location::current())
+	{
+		if (condition == true)
+			return;
+
+		std::println("{}[Error]: {}, in {} @ {}{}",
+		             color::BRED,
+		             message,
+		             location.function_name(),
+		             location.line(),
+		             color::RESET);
+		assert(condition);
+	}
+
+	// print information messages
+	void info(const std::string_view message)
+	{
+		std::println("{}[Info]: {}{}",
+		             color::GRN,
+		             message,
+		             color::RESET);
+	}
+}
 namespace base
 {
 	// Compilation mode
@@ -43,20 +100,22 @@ namespace base
 	// Initialize SDL with GPU
 	auto init(int width, int height, std::string_view title) -> sdl_context
 	{
+		msg::info("Initialize SDL, GPU, and Window");
+
 		auto res = SDL_Init(SDL_INIT_VIDEO);
-		assert(res == true && "SDL could not initialize.");
+		msg::error(res == true, "SDL could not initialize.");
 
 		// get available GPU
 		auto gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_SPIRV, debug, NULL);
-		assert(gpu != nullptr && "Could not get GPU device.");
+		msg::error(gpu != nullptr, "Could not get GPU device.");
 
 		// make a window
 		auto window = SDL_CreateWindow(title.data(), width, height, NULL);
-		assert(window != nullptr && "Window could not be created.");
+		msg::error(window != nullptr, "Window could not be created.");
 
 		// get GPU surface for window
 		res = SDL_ClaimWindowForGPUDevice(gpu, window);
-		assert(res == true && "Could not claim window for gpu.");
+		msg::error(res == true, "Could not claim window for gpu.");
 
 		// return the sdl_context, with objects wrapped in unique_ptr
 		return {
@@ -65,8 +124,11 @@ namespace base
 		};
 	}
 
-	void destroy([[maybe_unused]] sdl_context &ctx)
+	// Destroy/Clean up SDL objects, especially cases not captured by custom deleter
+	void destroy(sdl_context &ctx)
 	{
+		msg::info("Destroy Window, GPU and SDL");
+
 		SDL_ReleaseWindowFromGPUDevice(ctx.gpu.get(), ctx.window.get());
 
 		ctx = {};
@@ -82,8 +144,8 @@ namespace frame
 		auto sc_tex = (SDL_GPUTexture *)nullptr;
 
 		auto res = SDL_WaitAndAcquireGPUSwapchainTexture(cmd_buf, ctx.window.get(), &sc_tex, NULL, NULL);
-		assert(res == true && "Wait and acquire GPU swapchain texture failed.");
-		assert(sc_tex != nullptr && "Swapchain texture is null. Is window minimized?");
+		msg::error(res == true, "Wait and acquire GPU swapchain texture failed.");
+		msg::error(sc_tex != nullptr, "Swapchain texture is null. Is window minimized?");
 
 		return sc_tex;
 	}
@@ -92,7 +154,7 @@ namespace frame
 	void draw(base::sdl_context &ctx)
 	{
 		auto cmd_buf = SDL_AcquireGPUCommandBuffer(ctx.gpu.get());
-		assert(cmd_buf != nullptr && "Failed to acquire command buffer.");
+		msg::error(cmd_buf != nullptr, "Failed to acquire command buffer.");
 
 		auto sc_image          = get_swapchain_texture(ctx, cmd_buf);
 		auto color_target_info = SDL_GPUColorTargetInfo{
