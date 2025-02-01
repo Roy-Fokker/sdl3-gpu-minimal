@@ -38,6 +38,81 @@ list(APPEND platform_definitions
 )
 
 #---------------------------------------------------------------------------------------
+# Find shader compiler
+
+find_program(DXC dxc DOC "DirectX 12 Shader Compiler")
+if ("${DXC}" STREQUAL "DXC-NOTFOUND")
+	message(FATAL_ERROR "[Error]: DirectX Shader Compiler not found")
+endif()
+message(STATUS "[Info]: Found DirectX Shader Compiler - ${DXC}")
+
+#---------------------------------------------------------------------------------------
+# Function to take shader file and compile it as dependency of program
+
+function(target_hlsl_sources TARGET)
+	# figure out how many files we have to configure given the pattern
+	list(LENGTH ARGN count_HLSL)
+	math(EXPR count_HLSL "${count_HLSL} / 3")
+
+	# List of compiled shader output
+	set(shader_files "")
+	set(shader_sources "")
+
+	# Loop through all the pairs for filename:profile provided
+	foreach(i RANGE 1 ${count_HLSL})
+		math(EXPR fni "(${i}-1)*3")              # filename index
+		math(EXPR pfi "${fni}+2")                # profile index
+		list(GET ARGN ${fni} hlsl_filename)      # get the filename[i]
+		list(GET ARGN ${pfi} hlsl_profile)       # get the profile[i]
+
+		# get the absolute path of current source file
+		file(REAL_PATH ${hlsl_filename} source_abs)
+
+		if(NOT EXISTS ${source_abs})
+			message(FATAL_ERROR "Cannot find shader file: ${source_abs}")
+		endif()
+
+		# get only the filename from absolute path
+		cmake_path(GET source_abs STEM basename)
+		set(basename "${basename}.${hlsl_profile}")
+
+		# get only the parent directory of the file from absolute path
+		cmake_path(GET source_abs PARENT_PATH source_fldr)
+		get_filename_component(source_fldr "${source_fldr}" NAME)
+		
+		# shader output folder will be a subfolder in the binary directory
+		set(shader_dir ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders)
+
+		# full path to compiled output 
+		set(output ${shader_dir}/${basename}.cso)
+
+		# call vulkan sdk's dxc compiler with source and output arguments.
+		add_custom_command(
+			OUTPUT ${output}
+			COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_dir}
+			COMMAND ${DXC} -E main -Fo ${output} -T ${hlsl_profile} ${source_abs}
+			DEPENDS ${source_abs}
+			COMMENT "DXC Compiling SPIRV: ${hlsl_filename} -> ${output}"
+			VERBATIM
+		)
+
+		list(APPEND shader_sources "${hlsl_filename}")
+		list(APPEND shader_files "${output}")
+	endforeach()
+
+	# make a new variable to hold all output target names
+	set(shader_group "${TARGET}_HLSL")
+	# add custom target using new variable bound to output file of glslc step
+	add_custom_target("${shader_group}"
+					  DEPENDS "${shader_files}"
+					  SOURCES "${shader_sources}"
+	)
+
+	# add compilation of this shader as dependency of the target
+	add_dependencies("${TARGET}" "${shader_group}")
+endfunction()
+
+#---------------------------------------------------------------------------------------
 # Look for libraries we want to use for this project
 find_package(SDL3 CONFIG REQUIRED)
 
@@ -73,5 +148,10 @@ target_link_libraries(${PRJ_APP_NAME}
 		SDL3::SDL3 # SDL library version 3.2
 )
 
-#---------------------------------------------------------------------------------------
+# shader source files used by this application
+target_hlsl_sources(${PRJ_APP_NAME}
+	raw_triangle.vs.hlsl : vs_6_4
+	raw_triangle.fs.hlsl : ps_6_4
+)
 
+#---------------------------------------------------------------------------------------
