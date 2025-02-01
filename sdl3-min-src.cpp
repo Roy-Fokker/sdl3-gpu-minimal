@@ -160,6 +160,9 @@ namespace base
 		auto gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_SPIRV, debug, NULL);
 		msg::error(gpu != nullptr, "Could not get GPU device.");
 
+		auto gpu_driver_name = std::string_view{ SDL_GetGPUDeviceDriver(gpu) };
+		msg::info(std::format("GPU Driver Name: {}", gpu_driver_name));
+
 		// make a window
 		auto window = SDL_CreateWindow(title.data(), width, height, NULL);
 		msg::error(window != nullptr, "Window could not be created.");
