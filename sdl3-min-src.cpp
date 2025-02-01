@@ -66,6 +66,53 @@ namespace msg
 		             color::RESET);
 	}
 }
+
+/*
+ * Platform IO helpers
+ */
+namespace io
+{
+	// Simple function to read a file in binary mode.
+	auto read_file(const std::filesystem::path &filename) -> std::vector<std::byte>
+	{
+		std::println("{}Reading file: {}{}", CLR::BBLU, filename.string(), CLR::RESET);
+
+		auto file = std::ifstream(filename, std::ios::in | std::ios::binary);
+
+		assert(file.good() and "failed to open file!");
+
+		auto file_size = std::filesystem::file_size(filename);
+		auto buffer    = std::vector<std::byte>(file_size);
+
+		file.read(reinterpret_cast<char *>(buffer.data()), file_size);
+
+		file.close();
+
+		return buffer;
+	}
+
+	// Convience alias for a span of bytes
+	using byte_span  = std::span<const std::byte>;
+	using byte_spans = std::span<byte_span>;
+
+	// Convert any object type to a span of bytes
+	auto as_byte_span(const auto &src) -> byte_span
+	{
+		return std::span{
+			reinterpret_cast<const std::byte *>(&src),
+			sizeof(src)
+		};
+	}
+
+	// Covert a any contiguous range type to a span of bytes
+	auto as_byte_span(const std::ranges::contiguous_range auto &src) -> byte_span
+	{
+		auto src_span   = std::span{ src };      // convert to a span,
+		auto byte_size  = src_span.size_bytes(); // so we can get size_bytes
+		auto byte_start = reinterpret_cast<const std::byte *>(src.data());
+		return { byte_start, byte_size };
+	}
+}
 namespace base
 {
 	// Compilation mode
