@@ -1,12 +1,17 @@
 #include <cassert>
+
+// SDL 3 header
 #include <SDL3/SDL.h>
 
+// Standard Library module
 import std;
 
+// literal suffixes for strings, string_view, etc
 using namespace std::literals;
 
 namespace base
 {
+	// Compilation mode
 	constexpr auto debug =
 #ifdef _DEBUG
 		true;
@@ -14,6 +19,8 @@ namespace base
 		false;
 #endif
 
+	// Deleter template, for use with SDL objects.
+	// Allows use of SDL Objects with C++'s smart pointers, using SDL's destroy function
 	template <auto fn>
 	struct sdl_deleter
 	{
@@ -22,31 +29,36 @@ namespace base
 			fn(arg);
 		}
 	};
+	// Define SDL types with std::unique_ptr and custom deleter;
 	using sdl_gpu_ptr    = std::unique_ptr<SDL_GPUDevice, sdl_deleter<SDL_DestroyGPUDevice>>;
 	using sdl_window_ptr = std::unique_ptr<SDL_Window, sdl_deleter<SDL_DestroyWindow>>;
 
+	// Structure containing all SDL objects that need to live for life of the program
 	struct sdl_context
 	{
 		sdl_gpu_ptr gpu;
 		sdl_window_ptr window;
 	};
 
+	// Initialize SDL with GPU
 	auto init(int width, int height, std::string_view title) -> sdl_context
 	{
 		auto res = SDL_Init(SDL_INIT_VIDEO);
 		assert(res == true && "SDL could not initialize.");
 
-		auto ctx = sdl_context{};
-
+		// get available GPU
 		auto gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_SPIRV, debug, NULL);
 		assert(gpu != nullptr && "Could not get GPU device.");
 
+		// make a window
 		auto window = SDL_CreateWindow(title.data(), width, height, NULL);
 		assert(window != nullptr && "Window could not be created.");
 
+		// get GPU surface for window
 		res = SDL_ClaimWindowForGPUDevice(gpu, window);
 		assert(res == true && "Could not claim window for gpu.");
 
+		// return the sdl_context, with objects wrapped in unique_ptr
 		return {
 			.gpu    = sdl_gpu_ptr(gpu),
 			.window = sdl_window_ptr(window),
@@ -64,17 +76,19 @@ namespace base
 
 namespace frame
 {
+	// Get Swapchain Image/Texture, wait if none is available
 	auto get_swapchain_texture(base::sdl_context &ctx, SDL_GPUCommandBuffer *cmd_buf) -> SDL_GPUTexture *
 	{
 		auto sc_tex = (SDL_GPUTexture *)nullptr;
 
 		auto res = SDL_WaitAndAcquireGPUSwapchainTexture(cmd_buf, ctx.window.get(), &sc_tex, NULL, NULL);
 		assert(res == true && "Wait and acquire GPU swapchain texture failed.");
-		assert(sc_tex != nullptr && "Swapchain texture is null.");
+		assert(sc_tex != nullptr && "Swapchain texture is null. Is window minimized?");
 
 		return sc_tex;
 	}
 
+	// Draw to window using Command Buffer and Renderpass
 	void draw(base::sdl_context &ctx)
 	{
 		auto cmd_buf = SDL_AcquireGPUCommandBuffer(ctx.gpu.get());
@@ -110,7 +124,7 @@ auto main() -> int
 	{
 		while (SDL_PollEvent(&evnt))
 		{
-			if (evnt.type == SDL_EVENT_QUIT)
+			if (evnt.type == SDL_EVENT_QUIT or (evnt.type == SDL_EVENT_KEY_DOWN and evnt.key.key == SDLK_ESCAPE))
 			{
 				quit = true;
 			}
