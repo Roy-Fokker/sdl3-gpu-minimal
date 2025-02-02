@@ -235,7 +235,9 @@ namespace frame
 		std::array<sdl_gpu_buffer_ptr, 2> vertex_buffers           = {};
 
 		SDL_GPUGraphicsPipeline *active_pipeline = nullptr;
-		SDL_GPUBuffer *active_vertex_buffer      = nullptr;
+
+		SDL_GPUViewport cw_view;
+		SDL_GPUViewport ccw_view;
 	};
 
 	// Create GPU side shader using in-memory shader binary for specified stage
@@ -392,8 +394,19 @@ namespace frame
 		SDL_EndGPUCopyPass(copypass);
 		SDL_SubmitGPUCommandBuffer(upload_cmd);
 		SDL_ReleaseGPUTransferBuffer(ctx.gpu.get(), transfer_buffer);
+	}
 
-		rndr.active_vertex_buffer = rndr.vertex_buffers.at(0).get();
+	void create_viewports(const base::sdl_context &ctx, frame_context &rndr)
+	{
+		auto width  = 0;
+		auto height = 0;
+		SDL_GetWindowSizeInPixels(ctx.window.get(), &width, &height);
+
+		auto w = width / 2.f;
+		auto h = height * 1.f;
+
+		rndr.cw_view  = { 0, 0, w, h };
+		rndr.ccw_view = { w, 0, w, h };
 	}
 
 	// Initialize all Frame objects
@@ -407,6 +420,7 @@ namespace frame
 		auto rndr = frame_context{};
 		create_pipelines(ctx, static_cast<uint32_t>(vertices.size() / vertex_count), vertex_attributes, rndr);
 		create_and_copy_vertices(ctx, vertices, rndr);
+		create_viewports(ctx, rndr);
 
 		return rndr;
 	}
@@ -451,12 +465,22 @@ namespace frame
 
 		SDL_BindGPUGraphicsPipeline(renderpass, rndr.active_pipeline);
 
-		auto vertex_bindings = SDL_GPUBufferBinding{
-			.buffer = rndr.active_vertex_buffer,
+		auto cw_vertex_bindings = SDL_GPUBufferBinding{
+			.buffer = rndr.vertex_buffers.at(0).get(),
 			.offset = 0
 		};
-		SDL_BindGPUVertexBuffers(renderpass, 0, &vertex_bindings, 1);
 
+		auto ccw_vertex_bindings = SDL_GPUBufferBinding{
+			.buffer = rndr.vertex_buffers.at(1).get(),
+			.offset = 0
+		};
+
+		SDL_BindGPUVertexBuffers(renderpass, 0, &cw_vertex_bindings, 1);
+		SDL_SetGPUViewport(renderpass, &rndr.cw_view);
+		SDL_DrawGPUPrimitives(renderpass, 3, 1, 0, 0);
+
+		SDL_BindGPUVertexBuffers(renderpass, 0, &ccw_vertex_bindings, 1);
+		SDL_SetGPUViewport(renderpass, &rndr.ccw_view);
 		SDL_DrawGPUPrimitives(renderpass, 3, 1, 0, 0);
 
 		SDL_EndGPURenderPass(renderpass);
@@ -497,15 +521,6 @@ namespace app
 		auto pl_idx = static_cast<uint8_t>(mode);
 
 		rndr.active_pipeline = rndr.pipelines.at(pl_idx).get();
-
-		if (pl_idx > 2)
-		{
-			rndr.active_vertex_buffer = rndr.vertex_buffers.at(1).get();
-		}
-		else
-		{
-			rndr.active_vertex_buffer = rndr.vertex_buffers.at(0).get();
-		}
 	}
 }
 
