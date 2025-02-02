@@ -10,9 +10,16 @@ External dependencies are managed via `vcpkg`. `SDL3` is consumed as an dependen
 `.clang-tidy` and `.clang-format` to maintain code formatting rules.
 `.clangd` to experiment with using clangd as lsp, it doesn't like modules.
 
-Windows only for the moment, but it shouldn't have issues compiling on linux with some tweaks.
-For example, changing shader complier from DirectX's DXC to Vulkan's DXC which is shipped with Vulkan SDK.
-Windows SDK's DXC cannot compile to SPIR-V, and Vulkan SDK's DXC cannot compile to DXIL. At least I wasn't able to make this work with version I have installed on system. Both are seemingly maintained by Microsoft.
+Project uses `CMakePresets` json file to control platform some specific compiler configuration.
+As well as build (`ninja`) and external dependency (`vcpkg`) configuration.
+
+Windows only for the moment, but it shouldn't have issues compiling on linux with some tweaks. e.g. adding Linux build presets.
+
+### Shader Compilation
+CMake script uses a custom function to take list of shader source files and output compiled bytecode to `bin/shaders` directory. It also makes shader bytecode output a dependency of the application. 
+So compilation error in shader will stop the build process.
+
+As mentioned above, by default, code expects `Windows`. As it uses DirectX's DXC compiler to convert HLSL to DXIL bytecode. Application prefers DX12 over Vulkan. I suppose if the order were changed, it would need SPIR-V bytecode. Which would require changing shader complier from DirectX's DXC to Vulkan's DXC which is shipped with Vulkan SDK. Windows SDK's DXC cannot compile to SPIR-V, and Vulkan SDK's DXC cannot compile to DXIL. At least I wasn't able to make this work with versions I have installed on system.
 
 ## Prerequisites
 Build Tools
@@ -36,6 +43,7 @@ cmake --build --preset windows-debug
 - [Clear Screen](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/0-clear-screen): Clear window with specified color.
 - [Basic Triangle](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/1-raw-triangle): Draw a simple colored triangle. Press 1, 2, or 3, to change pipeline type, viewport, and scissor respectively
 - [Vertex Buffer Triangle](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/2-vertex-buffer): Draw a triangle using vertex buffer.
+- [Cull Modes](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/3-cull-modes): Draw triangle with Backface/Frontface Culling, Clockwise/Counter-Clockwise vertex ordering. Press 1-6 to toggle cull-mode + vertex-order combinations.
 
 ## References
 - <https://github.com/TheSpydog/SDL_gpu_examples> : my code is basically following this repo as example/source. But without "framework" portion so I can understand it better.

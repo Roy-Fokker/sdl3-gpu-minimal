@@ -156,7 +156,7 @@ namespace base
 		auto res = SDL_Init(SDL_INIT_VIDEO);
 		msg::error(res == true, "SDL could not initialize.");
 
-		// get available GPU
+		// get available GPU, D3D12 or Vulkan
 		auto gpu = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_SPIRV, debug, NULL);
 		msg::error(gpu != nullptr, "Could not get GPU device.");
 
@@ -216,11 +216,26 @@ namespace frame
 	using sdl_free_buffer       = sdl_gpu_deleter<SDL_ReleaseGPUBuffer>;
 	using sdl_gpu_buffer_ptr    = std::unique_ptr<SDL_GPUBuffer, sdl_free_buffer>;
 
+	// Cull Mode + Vertex Ordering combinations
+	enum class mode_type
+	{
+		cw_cull_none,
+		cw_cull_front,
+		cw_cull_back,
+		ccw_cull_none,
+		ccw_cull_front,
+		ccw_cull_back,
+	};
+	constexpr auto num_mode_types = uint8_t{ 6 };
+
 	// Structure to hold objects required to draw a frame
 	struct frame_context
 	{
-		sdl_gfx_pipeline_ptr pipeline    = nullptr;
-		sdl_gpu_buffer_ptr vertex_buffer = nullptr;
+		std::array<sdl_gfx_pipeline_ptr, num_mode_types> pipelines = {};
+		std::array<sdl_gpu_buffer_ptr, 2> vertex_buffers           = {};
+
+		SDL_GPUGraphicsPipeline *active_pipeline = nullptr;
+		SDL_GPUBuffer *active_vertex_buffer      = nullptr;
 	};
 
 	// Create GPU side shader using in-memory shader binary for specified stage
@@ -238,7 +253,7 @@ namespace frame
 		auto shader_info = SDL_GPUShaderCreateInfo{
 			.code_size  = bin.size(),
 			.code       = reinterpret_cast<const std::uint8_t *>(bin.data()),
-			.entrypoint = "main",
+			.entrypoint = "main", // Assume shader's entry point is always main
 			.format     = shader_format,
 			.stage      = stage,
 		};
@@ -297,10 +312,21 @@ namespace frame
 			},
 		};
 
-		auto pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
-		msg::error(pipeline != nullptr, "Failed to create fill pipeline.");
+		for (auto &&[idx, rpl] : rndr.pipelines | std::views::enumerate)
+		{
+			pipeline_info.rasterizer_state.cull_mode = static_cast<SDL_GPUCullMode>(idx % 3); // Have three cull modes, [none, front, back]
+			pipeline_info.rasterizer_state.front_face =
+				(idx > 2) // have two vertex ordering types [clockwise(cw), counter-clockwise(ccw)]
+					? SDL_GPU_FRONTFACE_CLOCKWISE
+					: SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
 
-		rndr.pipeline = sdl_gfx_pipeline_ptr(pipeline, sdl_free_gfx_pipeline{ ctx.gpu.get() });
+			auto pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
+			msg::error(pipeline != nullptr, "Failed to create fill pipeline.");
+
+			rpl = sdl_gfx_pipeline_ptr(pipeline, sdl_free_gfx_pipeline{ ctx.gpu.get() });
+		}
+
+		rndr.active_pipeline = rndr.pipelines.at(0).get();
 	}
 
 	// Create Vertex Buffer, and using a Transfer Buffer upload vertex data
@@ -310,21 +336,26 @@ namespace frame
 	{
 		msg::info("Create Vertex Buffer.");
 
-		auto buffer_size = static_cast<uint32_t>(vertices.size());
+		auto transfer_size = static_cast<uint32_t>(vertices.size());
+		auto buffer_size   = transfer_size / 2; // Assumes we have two triangles, hence divide by 2
 
 		auto buffer_info = SDL_GPUBufferCreateInfo{
 			.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
 			.size  = buffer_size,
 		};
 
-		auto vertex_buffer = SDL_CreateGPUBuffer(ctx.gpu.get(), &buffer_info);
-		rndr.vertex_buffer = sdl_gpu_buffer_ptr(vertex_buffer, sdl_free_buffer{ ctx.gpu.get() });
-		msg::error(vertex_buffer != nullptr, "Could not create GPU Vertex Buffer.");
+		for (auto &&vb : rndr.vertex_buffers)
+		{
+			auto vertex_buffer = SDL_CreateGPUBuffer(ctx.gpu.get(), &buffer_info);
+			msg::error(vertex_buffer != nullptr, "Could not create GPU Vertex Buffer.");
+
+			vb = sdl_gpu_buffer_ptr(vertex_buffer, sdl_free_buffer{ ctx.gpu.get() });
+		}
 
 		msg::info("Create Transfer Buffer.");
 		auto transfer_buffer_info = SDL_GPUTransferBufferCreateInfo{
 			.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-			.size  = buffer_size,
+			.size  = transfer_size,
 		};
 
 		auto transfer_buffer = SDL_CreateGPUTransferBuffer(ctx.gpu.get(), &transfer_buffer_info);
@@ -341,21 +372,28 @@ namespace frame
 		auto upload_cmd = SDL_AcquireGPUCommandBuffer(ctx.gpu.get());
 		auto copypass   = SDL_BeginGPUCopyPass(upload_cmd);
 
-		auto src = SDL_GPUTransferBufferLocation{
-			.transfer_buffer = transfer_buffer,
-			.offset          = 0,
-		};
-		auto dst = SDL_GPUBufferRegion{
-			.buffer = vertex_buffer,
-			.offset = 0,
-			.size   = buffer_size
-		};
+		for (auto &&[idx, vb] : rndr.vertex_buffers | std::views::enumerate)
+		{
+			auto vertex_buffer = vb.get();
 
-		SDL_UploadToGPUBuffer(copypass, &src, &dst, false);
+			auto src = SDL_GPUTransferBufferLocation{
+				.transfer_buffer = transfer_buffer,
+				.offset          = static_cast<uint32_t>(idx * buffer_size),
+			};
+			auto dst = SDL_GPUBufferRegion{
+				.buffer = vertex_buffer,
+				.offset = 0,
+				.size   = buffer_size,
+			};
+
+			SDL_UploadToGPUBuffer(copypass, &src, &dst, false);
+		}
 
 		SDL_EndGPUCopyPass(copypass);
 		SDL_SubmitGPUCommandBuffer(upload_cmd);
 		SDL_ReleaseGPUTransferBuffer(ctx.gpu.get(), transfer_buffer);
+
+		rndr.active_vertex_buffer = rndr.vertex_buffers.at(0).get();
 	}
 
 	// Initialize all Frame objects
@@ -369,7 +407,6 @@ namespace frame
 		auto rndr = frame_context{};
 		create_pipelines(ctx, static_cast<uint32_t>(vertices.size() / vertex_count), vertex_attributes, rndr);
 		create_and_copy_vertices(ctx, vertices, rndr);
-		// create_viewport_and_scissor(rndr);
 
 		return rndr;
 	}
@@ -412,10 +449,10 @@ namespace frame
 
 		auto renderpass = SDL_BeginGPURenderPass(cmd_buf, &color_target_info, 1, NULL);
 
-		SDL_BindGPUGraphicsPipeline(renderpass, rndr.pipeline.get());
+		SDL_BindGPUGraphicsPipeline(renderpass, rndr.active_pipeline);
 
 		auto vertex_bindings = SDL_GPUBufferBinding{
-			.buffer = rndr.vertex_buffer.get(),
+			.buffer = rndr.active_vertex_buffer,
 			.offset = 0
 		};
 		SDL_BindGPUVertexBuffers(renderpass, 0, &vertex_bindings, 1);
@@ -453,6 +490,23 @@ namespace app
 			}
 		};
 	};
+
+	// Change active culling mode and vertex buffer
+	void update_pl_vb(frame::mode_type mode, frame::frame_context &rndr)
+	{
+		auto pl_idx = static_cast<uint8_t>(mode);
+
+		rndr.active_pipeline = rndr.pipelines.at(pl_idx).get();
+
+		if (pl_idx > 2)
+		{
+			rndr.active_vertex_buffer = rndr.vertex_buffers.at(1).get();
+		}
+		else
+		{
+			rndr.active_vertex_buffer = rndr.vertex_buffers.at(0).get();
+		}
+	}
 }
 
 auto main() -> int
@@ -463,15 +517,29 @@ auto main() -> int
 
 	auto ctx = base::init(window_width, window_height, app_title);
 
-	auto triangle = std::array{
+	auto triangle_ccw = std::array{
 		app::pos_clr_vertex{ -1.f, -1.f, 0.f, 255, 0, 0, 255 },
 		app::pos_clr_vertex{ 1.f, -1.f, 0.f, 0, 255, 0, 255 },
 		app::pos_clr_vertex{ 0.f, 1.f, 0.f, 0, 0, 255, 255 },
 	};
 
+	auto triangle_cw = std::array{
+		app::pos_clr_vertex{ 0.f, 1.f, 0.f, 255, 0, 0, 255 },
+		app::pos_clr_vertex{ 1.f, -1.f, 0.f, 0, 255, 0, 255 },
+		app::pos_clr_vertex{ -1.f, -1.f, 0.f, 0, 0, 255, 255 },
+	};
+
+	auto vertex_count = static_cast<uint32_t>(triangle_cw.size() + triangle_ccw.size());
+
+	// Needs to match frame::mode_type enum, cw then ccw
+	auto triangles = std::array{
+		triangle_cw,
+		triangle_ccw,
+	};
+
 	auto rndr = frame::init(ctx,
-	                        io::as_byte_span(triangle),
-	                        static_cast<uint32_t>(triangle.size()),
+	                        io::as_byte_span(triangles),
+	                        vertex_count,
 	                        app::pos_clr_vertex::vertex_attributes);
 
 	auto quit = false;
@@ -490,6 +558,24 @@ auto main() -> int
 				{
 				case SDLK_ESCAPE:
 					quit = true;
+					break;
+				case SDLK_1:
+					app::update_pl_vb(frame::mode_type::cw_cull_none, rndr);
+					break;
+				case SDLK_2:
+					app::update_pl_vb(frame::mode_type::cw_cull_front, rndr);
+					break;
+				case SDLK_3:
+					app::update_pl_vb(frame::mode_type::cw_cull_back, rndr);
+					break;
+				case SDLK_4:
+					app::update_pl_vb(frame::mode_type::ccw_cull_none, rndr);
+					break;
+				case SDLK_5:
+					app::update_pl_vb(frame::mode_type::ccw_cull_front, rndr);
+					break;
+				case SDLK_6:
+					app::update_pl_vb(frame::mode_type::ccw_cull_back, rndr);
 					break;
 				default:
 					break;
