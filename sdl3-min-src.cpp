@@ -413,7 +413,7 @@ auto main() -> int
 	{
 		while (SDL_PollEvent(&evnt))
 		{
-			if (evnt.type == SDL_EVENT_QUIT or (evnt.type == SDL_EVENT_KEY_DOWN and evnt.key.key == SDLK_ESCAPE))
+			if (evnt.type == SDL_EVENT_QUIT)
 			{
 				quit = true;
 			}
@@ -421,7 +421,10 @@ auto main() -> int
 			{
 				switch (evnt.key.key)
 				{
-				case SDLK_1:
+				case SDLK_ESCAPE:
+					quit = true;
+					break;
+				case SDLK_1: // toggle states
 					stt.use_line_fill = not stt.use_line_fill;
 					break;
 				case SDLK_2:
