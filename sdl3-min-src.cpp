@@ -213,19 +213,14 @@ namespace frame
 	using sdl_gfx_pipeline_ptr  = std::unique_ptr<SDL_GPUGraphicsPipeline, sdl_free_gfx_pipeline>;
 	using sdl_free_gfx_shader   = sdl_gpu_deleter<SDL_ReleaseGPUShader>;
 	using sdl_gpu_shader_ptr    = std::unique_ptr<SDL_GPUShader, sdl_free_gfx_shader>;
+	using sdl_free_buffer       = sdl_gpu_deleter<SDL_ReleaseGPUBuffer>;
+	using sdl_gpu_buffer_ptr    = std::unique_ptr<SDL_GPUBuffer, sdl_free_buffer>;
 
 	// Structure to hold objects required to draw a frame
 	struct frame_context
 	{
-		sdl_gfx_pipeline_ptr fill_pipeline = nullptr;
-		sdl_gfx_pipeline_ptr line_pipeline = nullptr;
-		SDL_GPUViewport small_viewport;
-		SDL_Rect small_scissor;
-
-		// Active pointers used by draw call
-		SDL_GPUGraphicsPipeline *pipeline = nullptr;
-		SDL_GPUViewport *viewport         = nullptr;
-		SDL_Rect *scissor                 = nullptr;
+		sdl_gfx_pipeline_ptr pipeline    = nullptr;
+		sdl_gpu_buffer_ptr vertex_buffer = nullptr;
 	};
 
 	// Create GPU side shader using in-memory shader binary for specified stage
@@ -255,15 +250,32 @@ namespace frame
 	}
 
 	// Create two pipelines with different fill modes, full and line.
-	void create_pipelines(const base::sdl_context &ctx, frame::frame_context &rndr)
+	void create_pipelines(const base::sdl_context &ctx,
+	                      uint32_t vertex_pitch,
+	                      const std::span<const SDL_GPUVertexAttribute> vertex_attributes,
+	                      frame::frame_context &rndr)
 	{
 		msg::info("Creating Pipelines.");
 
-		auto vs_bin = io::read_file("shaders/raw_triangle.vs_6_4.cso");
+		auto vs_bin = io::read_file("shaders/vertex_buffer_triangle.vs_6_4.cso");
 		auto fs_bin = io::read_file("shaders/raw_triangle.ps_6_4.cso");
 
 		auto vs_shdr = load_gpu_shader(ctx, vs_bin, SDL_GPU_SHADERSTAGE_VERTEX);
 		auto fs_shdr = load_gpu_shader(ctx, fs_bin, SDL_GPU_SHADERSTAGE_FRAGMENT);
+
+		auto vertex_description = SDL_GPUVertexBufferDescription{
+			.slot               = 0,
+			.pitch              = vertex_pitch,
+			.input_rate         = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+			.instance_step_rate = 0,
+		};
+
+		auto vertex_input = SDL_GPUVertexInputState{
+			.vertex_buffer_descriptions = &vertex_description,
+			.num_vertex_buffers         = 1,
+			.vertex_attributes          = vertex_attributes.data(),
+			.num_vertex_attributes      = static_cast<uint32_t>(vertex_attributes.size()),
+		};
 
 		auto color_targets = std::array{
 			SDL_GPUColorTargetDescription{
@@ -272,47 +284,92 @@ namespace frame
 		};
 
 		auto pipeline_info = SDL_GPUGraphicsPipelineCreateInfo{
-			.vertex_shader    = vs_shdr.get(),
-			.fragment_shader  = fs_shdr.get(),
-			.primitive_type   = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
-			.rasterizer_state = {
-			  .fill_mode = SDL_GPU_FILLMODE_FILL,
-			},
+			.vertex_shader      = vs_shdr.get(),
+			.fragment_shader    = fs_shdr.get(),
+			.vertex_input_state = vertex_input,
+			.primitive_type     = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+			.rasterizer_state   = {
+				.fill_mode = SDL_GPU_FILLMODE_FILL,
+            },
 			.target_info = {
 			  .color_target_descriptions = color_targets.data(),
 			  .num_color_targets         = static_cast<uint32_t>(color_targets.size()),
 			},
 		};
 
-		auto fill_pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
-		msg::error(fill_pipeline != nullptr, "Failed to create fill pipeline.");
+		auto pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
+		msg::error(pipeline != nullptr, "Failed to create fill pipeline.");
 
-		pipeline_info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_LINE;
-
-		auto line_pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
-		msg::error(line_pipeline != nullptr, "Failed to create line pipeline.");
-
-		rndr.fill_pipeline = sdl_gfx_pipeline_ptr(fill_pipeline, sdl_free_gfx_pipeline{ ctx.gpu.get() });
-		rndr.line_pipeline = sdl_gfx_pipeline_ptr(line_pipeline, sdl_free_gfx_pipeline{ ctx.gpu.get() });
+		rndr.pipeline = sdl_gfx_pipeline_ptr(pipeline, sdl_free_gfx_pipeline{ ctx.gpu.get() });
 	}
 
-	// Create small viewport and scissor objects.
-	// SDL seems to have default viewport and scissor, equal to window size.
-	// these override those, if used.
-	void create_viewport_and_scissor(frame::frame_context &rndr)
+	// Create Vertex Buffer, and using a Transfer Buffer upload vertex data
+	void create_and_copy_vertices(const base::sdl_context &ctx,
+	                              const io::byte_span vertices,
+	                              frame_context &rndr)
 	{
-		rndr.small_viewport = { 160, 120, 320, 240, 0.1f, 1.0f };
-		rndr.small_scissor  = { 320, 240, 320, 240 };
+		msg::info("Create Vertex Buffer.");
+
+		auto buffer_size = static_cast<uint32_t>(vertices.size());
+
+		auto buffer_info = SDL_GPUBufferCreateInfo{
+			.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+			.size  = buffer_size,
+		};
+
+		auto vertex_buffer = SDL_CreateGPUBuffer(ctx.gpu.get(), &buffer_info);
+		rndr.vertex_buffer = sdl_gpu_buffer_ptr(vertex_buffer, sdl_free_buffer{ ctx.gpu.get() });
+		msg::error(vertex_buffer != nullptr, "Could not create GPU Vertex Buffer.");
+
+		msg::info("Create Transfer Buffer.");
+		auto transfer_buffer_info = SDL_GPUTransferBufferCreateInfo{
+			.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+			.size  = buffer_size,
+		};
+
+		auto transfer_buffer = SDL_CreateGPUTransferBuffer(ctx.gpu.get(), &transfer_buffer_info);
+		msg::error(transfer_buffer != nullptr, "Could not create GPU Transfer Buffer");
+
+		msg::info("Copy vertices to Transfer Buffer.");
+		auto *data = SDL_MapGPUTransferBuffer(ctx.gpu.get(), transfer_buffer, false);
+
+		std::memcpy(data, vertices.data(), vertices.size());
+
+		SDL_UnmapGPUTransferBuffer(ctx.gpu.get(), transfer_buffer);
+
+		msg::info("Upload from Transfer Buffer to Vertex Buffer.");
+		auto upload_cmd = SDL_AcquireGPUCommandBuffer(ctx.gpu.get());
+		auto copypass   = SDL_BeginGPUCopyPass(upload_cmd);
+
+		auto src = SDL_GPUTransferBufferLocation{
+			.transfer_buffer = transfer_buffer,
+			.offset          = 0,
+		};
+		auto dst = SDL_GPUBufferRegion{
+			.buffer = vertex_buffer,
+			.offset = 0,
+			.size   = buffer_size
+		};
+
+		SDL_UploadToGPUBuffer(copypass, &src, &dst, false);
+
+		SDL_EndGPUCopyPass(copypass);
+		SDL_SubmitGPUCommandBuffer(upload_cmd);
+		SDL_ReleaseGPUTransferBuffer(ctx.gpu.get(), transfer_buffer);
 	}
 
 	// Initialize all Frame objects
-	auto init(const base::sdl_context &ctx) -> frame_context
+	auto init(const base::sdl_context &ctx,
+	          const io::byte_span vertices,
+	          uint32_t vertex_count,
+	          const std::span<const SDL_GPUVertexAttribute> vertex_attributes) -> frame_context
 	{
 		msg::info("Initialize frame objects");
 
 		auto rndr = frame_context{};
-		create_pipelines(ctx, rndr);
-		create_viewport_and_scissor(rndr);
+		create_pipelines(ctx, static_cast<uint32_t>(vertices.size() / vertex_count), vertex_attributes, rndr);
+		create_and_copy_vertices(ctx, vertices, rndr);
+		// create_viewport_and_scissor(rndr);
 
 		return rndr;
 	}
@@ -355,17 +412,13 @@ namespace frame
 
 		auto renderpass = SDL_BeginGPURenderPass(cmd_buf, &color_target_info, 1, NULL);
 
-		SDL_BindGPUGraphicsPipeline(renderpass, rndr.pipeline);
+		SDL_BindGPUGraphicsPipeline(renderpass, rndr.pipeline.get());
 
-		if (rndr.viewport != nullptr)
-		{
-			SDL_SetGPUViewport(renderpass, rndr.viewport);
-		}
-
-		if (rndr.scissor != nullptr)
-		{
-			SDL_SetGPUScissor(renderpass, rndr.scissor);
-		}
+		auto vertex_bindings = SDL_GPUBufferBinding{
+			.buffer = rndr.vertex_buffer.get(),
+			.offset = 0
+		};
+		SDL_BindGPUVertexBuffers(renderpass, 0, &vertex_bindings, 1);
 
 		SDL_DrawGPUPrimitives(renderpass, 3, 1, 0, 0);
 
@@ -380,20 +433,26 @@ namespace frame
  */
 namespace app
 {
-	struct state
+	struct pos_clr_vertex
 	{
-		bool use_small_view    = false;
-		bool use_small_scissor = false;
-		bool use_line_fill     = false;
-	};
+		float x, y, z;
+		uint8_t r, g, b, a;
 
-	// Change active objects in render context based on application state
-	void update(frame::frame_context &rndr, const state &stt)
-	{
-		rndr.pipeline = stt.use_line_fill ? rndr.line_pipeline.get() : rndr.fill_pipeline.get();
-		rndr.viewport = stt.use_small_view ? &rndr.small_viewport : nullptr;
-		rndr.scissor  = stt.use_small_scissor ? &rndr.small_scissor : nullptr;
-	}
+		constexpr static auto vertex_attributes = std::array{
+			SDL_GPUVertexAttribute{
+			  .location    = 0,
+			  .buffer_slot = 0,
+			  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+			  .offset      = 0,
+			},
+			SDL_GPUVertexAttribute{
+			  .location    = 1,
+			  .buffer_slot = 0,
+			  .format      = SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM,
+			  .offset      = sizeof(float) * 3,
+			}
+		};
+	};
 }
 
 auto main() -> int
@@ -404,9 +463,17 @@ auto main() -> int
 
 	auto ctx = base::init(window_width, window_height, app_title);
 
-	auto rndr = frame::init(ctx);
+	auto triangle = std::array{
+		app::pos_clr_vertex{ -1.f, -1.f, 0.f, 255, 0, 0, 255 },
+		app::pos_clr_vertex{ 1.f, -1.f, 0.f, 0, 255, 0, 255 },
+		app::pos_clr_vertex{ 0.f, 1.f, 0.f, 0, 0, 255, 255 },
+	};
 
-	auto stt  = app::state{};
+	auto rndr = frame::init(ctx,
+	                        io::as_byte_span(triangle),
+	                        static_cast<uint32_t>(triangle.size()),
+	                        app::pos_clr_vertex::vertex_attributes);
+
 	auto quit = false;
 	auto evnt = SDL_Event{};
 	while (not quit)
@@ -424,22 +491,13 @@ auto main() -> int
 				case SDLK_ESCAPE:
 					quit = true;
 					break;
-				case SDLK_1: // toggle states
-					stt.use_line_fill = not stt.use_line_fill;
-					break;
-				case SDLK_2:
-					stt.use_small_view = not stt.use_small_view;
-					break;
-				case SDLK_3:
-					stt.use_small_scissor = not stt.use_small_scissor;
-					break;
 				default:
 					break;
 				}
 			}
 		}
 
-		update(rndr, stt);
+		// update(rndr, stt);
 
 		frame::draw(ctx, rndr);
 	}
