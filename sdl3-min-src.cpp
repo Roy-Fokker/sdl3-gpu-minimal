@@ -497,8 +497,6 @@ auto main() -> int
 			}
 		}
 
-		// update(rndr, stt);
-
 		frame::draw(ctx, rndr);
 	}
 
