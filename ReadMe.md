@@ -35,6 +35,7 @@ cmake --build --preset windows-debug
 ## Learning Progress
 - [Clear Screen](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/0-clear-screen): Clear window with specified color.
 - [Basic Triangle](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/1-raw-triangle): Draw a simple colored triangle. Press 1, 2, or 3, to change pipeline type, viewport, and scissor respectively
+- [Vertex Buffer Triangle](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/2-vertex-buffer): Draw a triangle using vertex buffer.
 
 ## References
 - <https://github.com/TheSpydog/SDL_gpu_examples> : my code is basically following this repo as example/source. But without "framework" portion so I can understand it better.
