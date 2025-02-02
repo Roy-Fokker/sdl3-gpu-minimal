@@ -215,29 +215,18 @@ namespace frame
 	using sdl_gpu_shader_ptr    = std::unique_ptr<SDL_GPUShader, sdl_free_gfx_shader>;
 	using sdl_free_buffer       = sdl_gpu_deleter<SDL_ReleaseGPUBuffer>;
 	using sdl_gpu_buffer_ptr    = std::unique_ptr<SDL_GPUBuffer, sdl_free_buffer>;
-
-	// Cull Mode + Vertex Ordering combinations
-	enum class mode_type
-	{
-		cw_cull_none,
-		cw_cull_front,
-		cw_cull_back,
-		ccw_cull_none,
-		ccw_cull_front,
-		ccw_cull_back,
-	};
-	constexpr auto num_mode_types = uint8_t{ 6 };
+	using sdl_free_texture      = sdl_gpu_deleter<SDL_ReleaseGPUTexture>;
+	using sdl_gpu_texture_ptr   = std::unique_ptr<SDL_GPUTexture, sdl_free_texture>;
 
 	// Structure to hold objects required to draw a frame
 	struct frame_context
 	{
-		std::array<sdl_gfx_pipeline_ptr, num_mode_types> pipelines = {};
-		std::array<sdl_gpu_buffer_ptr, 2> vertex_buffers           = {};
+		sdl_gfx_pipeline_ptr masker_pipeline;
+		sdl_gfx_pipeline_ptr maskee_pipeline;
 
-		SDL_GPUGraphicsPipeline *active_pipeline = nullptr;
-
-		SDL_GPUViewport cw_view;
-		SDL_GPUViewport ccw_view;
+		sdl_gpu_buffer_ptr vertex_buffer;
+		sdl_gpu_texture_ptr depth_stencil_texture;
+		SDL_GPUTextureFormat depth_stencil_format;
 	};
 
 	// Create GPU side shader using in-memory shader binary for specified stage
@@ -300,35 +289,79 @@ namespace frame
 			}
 		};
 
+		auto masker_depth_stencil_state = SDL_GPUDepthStencilState{
+			//.compare_op         = SDL_GPU_COMPAREOP_ALWAYS,
+			.back_stencil_state = {
+			  .fail_op       = SDL_GPU_STENCILOP_REPLACE,
+			  .pass_op       = SDL_GPU_STENCILOP_KEEP,
+			  .depth_fail_op = SDL_GPU_STENCILOP_KEEP,
+			  .compare_op    = SDL_GPU_COMPAREOP_NEVER,
+			},
+
+			.front_stencil_state = {
+			  .fail_op       = SDL_GPU_STENCILOP_REPLACE,
+			  .pass_op       = SDL_GPU_STENCILOP_KEEP,
+			  .depth_fail_op = SDL_GPU_STENCILOP_KEEP,
+			  .compare_op    = SDL_GPU_COMPAREOP_NEVER,
+			},
+
+			.write_mask          = 0xff,
+			.enable_stencil_test = true,
+		};
+
 		auto pipeline_info = SDL_GPUGraphicsPipelineCreateInfo{
 			.vertex_shader      = vs_shdr.get(),
 			.fragment_shader    = fs_shdr.get(),
 			.vertex_input_state = vertex_input,
 			.primitive_type     = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
-			.rasterizer_state   = {
-				.fill_mode = SDL_GPU_FILLMODE_FILL,
-            },
+
+			.rasterizer_state = {
+			  .fill_mode  = SDL_GPU_FILLMODE_FILL,
+			  .cull_mode  = SDL_GPU_CULLMODE_NONE,
+			  .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
+			},
+
+			.depth_stencil_state = masker_depth_stencil_state,
+
 			.target_info = {
 			  .color_target_descriptions = color_targets.data(),
 			  .num_color_targets         = static_cast<uint32_t>(color_targets.size()),
+			  .depth_stencil_format      = rndr.depth_stencil_format,
+			  .has_depth_stencil_target  = true,
 			},
 		};
 
-		for (auto &&[idx, rpl] : rndr.pipelines | std::views::enumerate)
-		{
-			pipeline_info.rasterizer_state.cull_mode = static_cast<SDL_GPUCullMode>(idx % 3); // Have three cull modes, [none, front, back]
-			pipeline_info.rasterizer_state.front_face =
-				(idx > 2) // have two vertex ordering types [clockwise(cw), counter-clockwise(ccw)]
-					? SDL_GPU_FRONTFACE_CLOCKWISE
-					: SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+		auto masker_pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
+		msg::error(masker_pipeline != nullptr, "Failed to create masker pipeline.");
 
-			auto pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
-			msg::error(pipeline != nullptr, "Failed to create fill pipeline.");
+		rndr.masker_pipeline = sdl_gfx_pipeline_ptr(masker_pipeline, sdl_free_gfx_pipeline{ ctx.gpu.get() });
 
-			rpl = sdl_gfx_pipeline_ptr(pipeline, sdl_free_gfx_pipeline{ ctx.gpu.get() });
-		}
+		auto maskee_depth_stencil_state = SDL_GPUDepthStencilState{
+			//.compare_op         = SDL_GPU_COMPAREOP_LESS,
+			.back_stencil_state = {
+			  .fail_op       = SDL_GPU_STENCILOP_KEEP,
+			  .pass_op       = SDL_GPU_STENCILOP_KEEP,
+			  .depth_fail_op = SDL_GPU_STENCILOP_KEEP,
+			  .compare_op    = SDL_GPU_COMPAREOP_NEVER,
+			},
 
-		rndr.active_pipeline = rndr.pipelines.at(0).get();
+			.front_stencil_state = {
+			  .fail_op       = SDL_GPU_STENCILOP_KEEP,
+			  .pass_op       = SDL_GPU_STENCILOP_KEEP,
+			  .depth_fail_op = SDL_GPU_STENCILOP_KEEP,
+			  .compare_op    = SDL_GPU_COMPAREOP_EQUAL,
+			},
+
+			.compare_mask        = 0xff,
+			.write_mask          = 0,
+			.enable_stencil_test = true,
+		};
+		pipeline_info.depth_stencil_state = maskee_depth_stencil_state;
+
+		auto maskee_pipeline = SDL_CreateGPUGraphicsPipeline(ctx.gpu.get(), &pipeline_info);
+		msg::error(maskee_pipeline != nullptr, "Failed to create masker pipeline.");
+
+		rndr.maskee_pipeline = sdl_gfx_pipeline_ptr(maskee_pipeline, sdl_free_gfx_pipeline{ ctx.gpu.get() });
 	}
 
 	// Create Vertex Buffer, and using a Transfer Buffer upload vertex data
@@ -338,26 +371,22 @@ namespace frame
 	{
 		msg::info("Create Vertex Buffer.");
 
-		auto transfer_size = static_cast<uint32_t>(vertices.size());
-		auto buffer_size   = transfer_size / 2; // Assumes we have two triangles, hence divide by 2
+		auto buffer_size = static_cast<uint32_t>(vertices.size());
 
 		auto buffer_info = SDL_GPUBufferCreateInfo{
 			.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
 			.size  = buffer_size,
 		};
 
-		for (auto &&vb : rndr.vertex_buffers)
-		{
-			auto vertex_buffer = SDL_CreateGPUBuffer(ctx.gpu.get(), &buffer_info);
-			msg::error(vertex_buffer != nullptr, "Could not create GPU Vertex Buffer.");
+		auto vertex_buffer = SDL_CreateGPUBuffer(ctx.gpu.get(), &buffer_info);
+		msg::error(vertex_buffer != nullptr, "Could not create GPU Vertex Buffer.");
 
-			vb = sdl_gpu_buffer_ptr(vertex_buffer, sdl_free_buffer{ ctx.gpu.get() });
-		}
+		rndr.vertex_buffer = sdl_gpu_buffer_ptr(vertex_buffer, sdl_free_buffer{ ctx.gpu.get() });
 
 		msg::info("Create Transfer Buffer.");
 		auto transfer_buffer_info = SDL_GPUTransferBufferCreateInfo{
 			.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-			.size  = transfer_size,
+			.size  = buffer_size,
 		};
 
 		auto transfer_buffer = SDL_CreateGPUTransferBuffer(ctx.gpu.get(), &transfer_buffer_info);
@@ -374,39 +403,63 @@ namespace frame
 		auto upload_cmd = SDL_AcquireGPUCommandBuffer(ctx.gpu.get());
 		auto copypass   = SDL_BeginGPUCopyPass(upload_cmd);
 
-		for (auto &&[idx, vb] : rndr.vertex_buffers | std::views::enumerate)
-		{
-			auto vertex_buffer = vb.get();
+		auto src = SDL_GPUTransferBufferLocation{
+			.transfer_buffer = transfer_buffer,
+			.offset          = 0,
+		};
+		auto dst = SDL_GPUBufferRegion{
+			.buffer = vertex_buffer,
+			.offset = 0,
+			.size   = buffer_size,
+		};
 
-			auto src = SDL_GPUTransferBufferLocation{
-				.transfer_buffer = transfer_buffer,
-				.offset          = static_cast<uint32_t>(idx * buffer_size),
-			};
-			auto dst = SDL_GPUBufferRegion{
-				.buffer = vertex_buffer,
-				.offset = 0,
-				.size   = buffer_size,
-			};
-
-			SDL_UploadToGPUBuffer(copypass, &src, &dst, false);
-		}
+		SDL_UploadToGPUBuffer(copypass, &src, &dst, false);
 
 		SDL_EndGPUCopyPass(copypass);
 		SDL_SubmitGPUCommandBuffer(upload_cmd);
 		SDL_ReleaseGPUTransferBuffer(ctx.gpu.get(), transfer_buffer);
 	}
 
-	void create_viewports(const base::sdl_context &ctx, frame_context &rndr)
+	void create_depth_stencil_texture(const base::sdl_context &ctx, frame_context &rndr)
 	{
+		msg::info("Determine depth stencil texture format.");
+		rndr.depth_stencil_format = [&] {
+			if (SDL_GPUTextureSupportsFormat(ctx.gpu.get(),
+			                                 SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT,
+			                                 SDL_GPU_TEXTURETYPE_2D,
+			                                 SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET))
+				return SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT;
+
+			if (SDL_GPUTextureSupportsFormat(ctx.gpu.get(),
+			                                 SDL_GPU_TEXTUREFORMAT_D32_FLOAT_S8_UINT,
+			                                 SDL_GPU_TEXTURETYPE_2D,
+			                                 SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET))
+				return SDL_GPU_TEXTUREFORMAT_D32_FLOAT_S8_UINT;
+
+			return SDL_GPU_TEXTUREFORMAT_INVALID;
+		}();
+
+		msg::error(rndr.depth_stencil_format != SDL_GPU_TEXTUREFORMAT_INVALID,
+		           "Stencil format is not supported by GPU.");
+
+		msg::info("Get depth stencil texture size.");
 		auto width  = 0;
 		auto height = 0;
 		SDL_GetWindowSizeInPixels(ctx.window.get(), &width, &height);
 
-		auto w = width / 2.f;
-		auto h = height * 1.f;
-
-		rndr.cw_view  = { 0, 0, w, h };
-		rndr.ccw_view = { w, 0, w, h };
+		msg::info("Create depth stencil texture.");
+		auto texture_info = SDL_GPUTextureCreateInfo{
+			.type                 = SDL_GPU_TEXTURETYPE_2D,
+			.format               = rndr.depth_stencil_format,
+			.usage                = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET,
+			.width                = static_cast<uint32_t>(width),
+			.height               = static_cast<uint32_t>(height),
+			.layer_count_or_depth = 1,
+			.num_levels           = 1,
+			.sample_count         = SDL_GPU_SAMPLECOUNT_1,
+		};
+		auto depth_stencil_texture = SDL_CreateGPUTexture(ctx.gpu.get(), &texture_info);
+		rndr.depth_stencil_texture = sdl_gpu_texture_ptr(depth_stencil_texture, sdl_free_texture{ ctx.gpu.get() });
 	}
 
 	// Initialize all Frame objects
@@ -418,6 +471,7 @@ namespace frame
 		msg::info("Initialize frame objects");
 
 		auto rndr = frame_context{};
+		create_depth_stencil_texture(ctx, rndr);
 		create_pipelines(ctx, static_cast<uint32_t>(vertices.size() / vertex_count), vertex_attributes, rndr);
 		create_and_copy_vertices(ctx, vertices, rndr);
 		create_viewports(ctx, rndr);
@@ -456,22 +510,30 @@ namespace frame
 		auto sc_image          = get_swapchain_texture(ctx, cmd_buf);
 		auto color_target_info = SDL_GPUColorTargetInfo{
 			.texture     = sc_image,
-			.clear_color = SDL_FColor{ 0.4f, 0.4f, 0.5f, 1.0f },
+			.clear_color = SDL_FColor{ 0.0f, 0.0f, 0.0f, 1.0f },
 			.load_op     = SDL_GPU_LOADOP_CLEAR,
 			.store_op    = SDL_GPU_STOREOP_STORE,
 		};
 
-		auto renderpass = SDL_BeginGPURenderPass(cmd_buf, &color_target_info, 1, NULL);
-
-		SDL_BindGPUGraphicsPipeline(renderpass, rndr.active_pipeline);
-
-		auto cw_vertex_bindings = SDL_GPUBufferBinding{
-			.buffer = rndr.vertex_buffers.at(0).get(),
-			.offset = 0
+		auto depth_stencil_target_info = SDL_GPUDepthStencilTargetInfo{
+			.texture          = rndr.depth_stencil_texture.get(),
+			.clear_depth      = 0,
+			.load_op          = SDL_GPU_LOADOP_CLEAR,
+			.store_op         = SDL_GPU_STOREOP_DONT_CARE,
+			.stencil_load_op  = SDL_GPU_LOADOP_CLEAR,
+			.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE,
+			.cycle            = true,
+			.clear_stencil    = 0,
 		};
 
-		auto ccw_vertex_bindings = SDL_GPUBufferBinding{
-			.buffer = rndr.vertex_buffers.at(1).get(),
+		auto renderpass = SDL_BeginGPURenderPass(
+			cmd_buf,
+			&color_target_info,
+			1,
+			&depth_stencil_target_info);
+
+		auto vertex_bindings = SDL_GPUBufferBinding{
+			.buffer = rndr.vertex_buffer.get(),
 			.offset = 0
 		};
 
@@ -479,9 +541,13 @@ namespace frame
 		SDL_SetGPUViewport(renderpass, &rndr.cw_view);
 		SDL_DrawGPUPrimitives(renderpass, 3, 1, 0, 0);
 
-		SDL_BindGPUVertexBuffers(renderpass, 0, &ccw_vertex_bindings, 1);
-		SDL_SetGPUViewport(renderpass, &rndr.ccw_view);
+		SDL_SetGPUStencilReference(renderpass, 1);
+		SDL_BindGPUGraphicsPipeline(renderpass, rndr.masker_pipeline.get());
 		SDL_DrawGPUPrimitives(renderpass, 3, 1, 0, 0);
+
+		SDL_SetGPUStencilReference(renderpass, 0);
+		SDL_BindGPUGraphicsPipeline(renderpass, rndr.maskee_pipeline.get());
+		SDL_DrawGPUPrimitives(renderpass, 3, 1, 3, 0);
 
 		SDL_EndGPURenderPass(renderpass);
 
@@ -514,14 +580,6 @@ namespace app
 			}
 		};
 	};
-
-	// Change active culling mode and vertex buffer
-	void update_pl_vb(frame::mode_type mode, frame::frame_context &rndr)
-	{
-		auto pl_idx = static_cast<uint8_t>(mode);
-
-		rndr.active_pipeline = rndr.pipelines.at(pl_idx).get();
-	}
 }
 
 auto main() -> int
@@ -532,24 +590,24 @@ auto main() -> int
 
 	auto ctx = base::init(window_width, window_height, app_title);
 
-	auto triangle_ccw = std::array{
+	auto triangle_masker = std::array{
+		app::pos_clr_vertex{ -0.5, -0.5, 0.f, 255, 255, 0, 255 },
+		app::pos_clr_vertex{ 0.5, -0.5, 0.f, 255, 255, 0, 255 },
+		app::pos_clr_vertex{ 0.f, 0.5, 0.f, 255, 255, 0, 255 },
+	};
+
+	auto triangle_maskee = std::array{
 		app::pos_clr_vertex{ -1.f, -1.f, 0.f, 255, 0, 0, 255 },
 		app::pos_clr_vertex{ 1.f, -1.f, 0.f, 0, 255, 0, 255 },
 		app::pos_clr_vertex{ 0.f, 1.f, 0.f, 0, 0, 255, 255 },
 	};
 
-	auto triangle_cw = std::array{
-		app::pos_clr_vertex{ 0.f, 1.f, 0.f, 255, 0, 0, 255 },
-		app::pos_clr_vertex{ 1.f, -1.f, 0.f, 0, 255, 0, 255 },
-		app::pos_clr_vertex{ -1.f, -1.f, 0.f, 0, 0, 255, 255 },
-	};
-
-	auto vertex_count = static_cast<uint32_t>(triangle_cw.size() + triangle_ccw.size());
+	auto vertex_count = static_cast<uint32_t>(triangle_masker.size() + triangle_maskee.size());
 
 	// Needs to match frame::mode_type enum, cw then ccw
 	auto triangles = std::array{
-		triangle_cw,
-		triangle_ccw,
+		triangle_masker,
+		triangle_maskee,
 	};
 
 	auto rndr = frame::init(ctx,
@@ -573,24 +631,6 @@ auto main() -> int
 				{
 				case SDLK_ESCAPE:
 					quit = true;
-					break;
-				case SDLK_1:
-					app::update_pl_vb(frame::mode_type::cw_cull_none, rndr);
-					break;
-				case SDLK_2:
-					app::update_pl_vb(frame::mode_type::cw_cull_front, rndr);
-					break;
-				case SDLK_3:
-					app::update_pl_vb(frame::mode_type::cw_cull_back, rndr);
-					break;
-				case SDLK_4:
-					app::update_pl_vb(frame::mode_type::ccw_cull_none, rndr);
-					break;
-				case SDLK_5:
-					app::update_pl_vb(frame::mode_type::ccw_cull_front, rndr);
-					break;
-				case SDLK_6:
-					app::update_pl_vb(frame::mode_type::ccw_cull_back, rndr);
 					break;
 				default:
 					break;

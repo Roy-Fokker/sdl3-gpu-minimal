@@ -37,13 +37,18 @@ cmake --preset windows-default
 
 # to build the project
 cmake --build --preset windows-debug
+
+# to clean the project outputs
+cmake --build --preset windows-debug --target clean
 ```
 
 ## Learning Progress
+Each tag, modifies previous tag's sources.
 - [Clear Screen](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/0-clear-screen): Clear window with specified color.
 - [Basic Triangle](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/1-raw-triangle): Draw a simple colored triangle. Press 1, 2, or 3, to change pipeline type, viewport, and scissor respectively
 - [Vertex Buffer Triangle](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/2-vertex-buffer): Draw a triangle using vertex buffer.
 - [Cull Modes](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/3-cull-modes): Draw triangle with Backface/Frontface Culling, Clockwise/Counter-Clockwise vertex ordering. Press 1-6 to toggle cull-mode + vertex-order combinations.
+- [Basic Stencil](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/4-basic-stencil): Basic stencil operation. Substract mask from triangle.
 
 ## References
 - <https://github.com/TheSpydog/SDL_gpu_examples> : my code is basically following this repo as example/source. But without "framework" portion so I can understand it better.
