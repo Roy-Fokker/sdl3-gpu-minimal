@@ -474,7 +474,6 @@ namespace frame
 		create_depth_stencil_texture(ctx, rndr);
 		create_pipelines(ctx, static_cast<uint32_t>(vertices.size() / vertex_count), vertex_attributes, rndr);
 		create_and_copy_vertices(ctx, vertices, rndr);
-		create_viewports(ctx, rndr);
 
 		return rndr;
 	}
@@ -537,9 +536,7 @@ namespace frame
 			.offset = 0
 		};
 
-		SDL_BindGPUVertexBuffers(renderpass, 0, &cw_vertex_bindings, 1);
-		SDL_SetGPUViewport(renderpass, &rndr.cw_view);
-		SDL_DrawGPUPrimitives(renderpass, 3, 1, 0, 0);
+		SDL_BindGPUVertexBuffers(renderpass, 0, &vertex_bindings, 1);
 
 		SDL_SetGPUStencilReference(renderpass, 1);
 		SDL_BindGPUGraphicsPipeline(renderpass, rndr.masker_pipeline.get());
