@@ -113,6 +113,47 @@ function(target_hlsl_sources TARGET)
 endfunction()
 
 #---------------------------------------------------------------------------------------
+# Function to copy data/asset files and mark them as dependency of program
+function(target_data_assets TARGET)
+	# get count of asset files
+	list(LENGTH ARGN count_files)
+
+	# output directory
+	set(data_dir ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/data)
+
+	# loop over all the files
+	foreach(file_name IN ITEMS ${ARGN})
+		# get absolute path of file
+		file(REAL_PATH ${file_name} source_abs)
+
+		# copied file path
+		set(output_file ${data_dir}/${file_name})
+
+		# call copy command
+		add_custom_command(
+			OUTPUT ${output_file}
+			COMMAND ${CMAKE_COMMAND} -E make_directory ${data_dir}
+			COMMAND ${CMAKE_COMMAND} -E copy ${source_abs} ${data_dir}
+			DEPENDS ${source_abs}
+			COMMENT "Copy ${file_name} to ${data_dir}"
+		)
+
+		list(APPEND data_sources ${file_name})
+		list(APPEND data_outputs ${output_file})
+	endforeach()
+
+	# add custom target for all the copy operations
+	add_custom_target(${TARGET}_DATA
+		DEPENDS ${data_outputs}
+		SOURCES ${data_sources}
+	)
+
+	# add custom target as a dependency to TARGET
+	add_dependencies("${TARGET}" ${TARGET}_DATA)
+endfunction()
+
+
+#---------------------------------------------------------------------------------------
 # Look for libraries we want to use for this project
 find_package(SDL3 CONFIG REQUIRED)
 
@@ -154,6 +195,11 @@ target_hlsl_sources(${PRJ_APP_NAME}
 	shaders/raw_triangle.fs.hlsl : ps_6_4
 	shaders/vertex_buffer_triangle.vs.hlsl : vs_6_4
 	shaders/instanced_shapes.vs.hlsl : vs_6_4
+)
+
+# Data files/Assets used by this application
+target_data_assets(${PRJ_APP_NAME}
+	uv_grid.dds
 )
 
 #---------------------------------------------------------------------------------------
