@@ -48,12 +48,16 @@ namespace msg
 		if (condition == true)
 			return;
 
-		std::println("{}[Error]: {}, in {} @ {}{}",
+		auto sdl_err = SDL_GetError();
+
+		std::println("{}[Error]: {}, in {} @ {}{}\n"
+		             "\t[SDL Error]: {}",
 		             color::BRED,
 		             message,
 		             location.function_name(),
 		             location.line(),
-		             color::RESET);
+		             color::RESET,
+		             sdl_err);
 		assert(condition);
 	}
 
