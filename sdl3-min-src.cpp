@@ -120,12 +120,7 @@ namespace io
 namespace base
 {
 	// Compilation mode
-	constexpr auto debug =
-#ifdef _DEBUG
-		true;
-#else
-		false;
-#endif
+	constexpr auto debug = bool{ _DEBUG };
 
 	// Deleter template, for use with SDL objects.
 	// Allows use of SDL Objects with C++'s smart pointers, using SDL's destroy function
@@ -509,7 +504,7 @@ namespace frame
 		auto sc_image          = get_swapchain_texture(ctx, cmd_buf);
 		auto color_target_info = SDL_GPUColorTargetInfo{
 			.texture     = sc_image,
-			.clear_color = SDL_FColor{ 0.0f, 0.0f, 0.0f, 1.0f },
+			.clear_color = SDL_FColor{ 0.4f, 0.3f, 0.5f, 1.0f },
 			.load_op     = SDL_GPU_LOADOP_CLEAR,
 			.store_op    = SDL_GPU_STOREOP_STORE,
 		};
