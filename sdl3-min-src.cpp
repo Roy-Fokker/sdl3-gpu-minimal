@@ -266,7 +266,7 @@ namespace frame
 
 		msg::info("Creating Pipelines.");
 
-		auto vs_bin = io::read_file("shaders/vertex_buffer_triangle.vs_6_4.cso");
+		auto vs_bin = io::read_file("shaders/instanced_shapes.vs_6_4.cso");
 		auto fs_bin = io::read_file("shaders/raw_triangle.ps_6_4.cso");
 
 		auto vs_shdr = load_gpu_shader(ctx, vs_bin, SDL_GPU_SHADERSTAGE_VERTEX);
@@ -474,7 +474,12 @@ namespace frame
 		SDL_BindGPUIndexBuffer(renderpass, &index_bindings, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
 		SDL_BindGPUGraphicsPipeline(renderpass, rndr.pipeline.get());
-		SDL_DrawGPUIndexedPrimitives(renderpass, rndr.index_count, 1, 0, 0, 0);
+		SDL_DrawGPUIndexedPrimitives(renderpass,
+		                             rndr.index_count,
+		                             16,
+		                             0,
+		                             0,
+		                             0);
 
 		SDL_EndGPURenderPass(renderpass);
 

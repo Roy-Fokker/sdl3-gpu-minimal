@@ -153,6 +153,7 @@ target_hlsl_sources(${PRJ_APP_NAME}
 	shaders/raw_triangle.vs.hlsl : vs_6_4
 	shaders/raw_triangle.fs.hlsl : ps_6_4
 	shaders/vertex_buffer_triangle.vs.hlsl : vs_6_4
+	shaders/instanced_shapes.vs.hlsl : vs_6_4
 )
 
 #---------------------------------------------------------------------------------------
