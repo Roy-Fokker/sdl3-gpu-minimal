@@ -1,0 +1,4 @@
+The package dds-ktx provides CMake targets:
+
+    find_package(Dds-ktx REQUIRED)
+    target_include_directories(main PRIVATE ${Dds-ktx_INCLUDE_DIR})

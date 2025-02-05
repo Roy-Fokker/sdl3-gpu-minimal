@@ -155,7 +155,8 @@ endfunction()
 
 #---------------------------------------------------------------------------------------
 # Look for libraries we want to use for this project
-find_package(SDL3 CONFIG REQUIRED)
+find_package(SDL3 CONFIG REQUIRED)  # SDL3 library 
+find_package(Dds-ktx REQUIRED)      # DDS & KTS image file loader
 
 #---------------------------------------------------------------------------------------
 # set application specific configurations
@@ -187,6 +188,7 @@ target_sources(${PRJ_APP_NAME}
 target_link_libraries(${PRJ_APP_NAME}
 	PRIVATE
 		SDL3::SDL3 # SDL library version 3.2
+
 )
 
 # shader source files used by this application
