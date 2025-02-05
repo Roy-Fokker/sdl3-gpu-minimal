@@ -13,7 +13,7 @@ External dependencies are managed via `vcpkg`. `SDL3` is consumed as an dependen
 Project uses `CMakePresets` json file to control platform some specific compiler configuration.
 As well as build (`ninja`) and external dependency (`vcpkg`) configuration.
 
-Windows only for the moment, but it shouldn't have issues compiling on linux with some tweaks. e.g. adding Linux build presets.
+Windows only for the moment, but it shouldn't have issues compiling on linux with **some** tweaks. e.g. adding Linux build presets.
 
 ### Shader Compilation
 CMake script uses a custom function to take list of shader source files and output compiled bytecode to `bin/shaders` directory. It also makes shader bytecode output a dependency of the application. 
@@ -50,6 +50,9 @@ Each tag, modifies previous tag's sources.
 - [Cull Modes](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/3-cull-modes): Draw triangle with Backface/Frontface Culling, Clockwise/Counter-Clockwise vertex ordering. Press 1-6 to toggle cull-mode + vertex-order combinations.
 - [Basic Stencil](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/4-basic-stencil): Basic stencil operation. Substract mask from triangle.
 - [Index Buffer Shape](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/5-index-buffer): Draw a shape using Index Buffer.
+- [Instance Shapes](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/6-instance-shapes): Slight tweak of previous, simple change to vertex shader and increase instance count in cpp.
+- Basic Texture
+- Basic Depth Buffer
 
 ## References
 - <https://github.com/TheSpydog/SDL_gpu_examples> : my code is basically following this repo as example/source. But without "framework" portion so I can understand it better.
