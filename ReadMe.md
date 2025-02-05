@@ -49,6 +49,7 @@ Each tag, modifies previous tag's sources.
 - [Vertex Buffer Triangle](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/2-vertex-buffer): Draw a triangle using vertex buffer.
 - [Cull Modes](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/3-cull-modes): Draw triangle with Backface/Frontface Culling, Clockwise/Counter-Clockwise vertex ordering. Press 1-6 to toggle cull-mode + vertex-order combinations.
 - [Basic Stencil](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/4-basic-stencil): Basic stencil operation. Substract mask from triangle.
+- [Index Buffer Shape](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/5-index-buffer): Draw a shape using Index Buffer.
 
 ## References
 - <https://github.com/TheSpydog/SDL_gpu_examples> : my code is basically following this repo as example/source. But without "framework" portion so I can understand it better.
