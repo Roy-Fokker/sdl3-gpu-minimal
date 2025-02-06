@@ -364,6 +364,8 @@ namespace frame
 	using sdl_gpu_buffer_ptr    = std::unique_ptr<SDL_GPUBuffer, sdl_free_buffer>;
 	using sdl_free_texture      = sdl_gpu_deleter<SDL_ReleaseGPUTexture>;
 	using sdl_gpu_texture_ptr   = std::unique_ptr<SDL_GPUTexture, sdl_free_texture>;
+	using sdl_free_sampler      = sdl_gpu_deleter<SDL_ReleaseGPUSampler>;
+	using sdl_gpu_sampler_ptr   = std::unique_ptr<SDL_GPUSampler, sdl_free_sampler>;
 
 	// Structure to hold objects required to draw a frame
 	struct frame_context
@@ -376,6 +378,7 @@ namespace frame
 		uint32_t index_count;
 
 		sdl_gpu_texture_ptr grid_texture;
+		std::array<sdl_gpu_sampler_ptr, 6> samplers;
 	};
 
 	// Create GPU side shader using in-memory shader binary for specified stage
@@ -607,6 +610,86 @@ namespace frame
 		SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
 	}
 
+	void create_samplers(const base::sdl_context &ctx, frame_context &rndr)
+	{
+		auto make_sampler = [](SDL_GPUDevice *device, const SDL_GPUSamplerCreateInfo &sampler_info) -> sdl_gpu_sampler_ptr {
+			auto sampler = SDL_CreateGPUSampler(device, &sampler_info);
+			msg::error(sampler != nullptr, "Failed to create sampler.");
+			return sdl_gpu_sampler_ptr(sampler, sdl_free_sampler{ device });
+		};
+
+		auto device = ctx.gpu.get();
+
+		msg::info("Create Point, Linear and Anisotropic; Clamp and Wrap Samplers");
+
+		rndr.samplers[0] = make_sampler(device, /* Point Clamp */
+		                                SDL_GPUSamplerCreateInfo{
+										  .min_filter        = SDL_GPU_FILTER_NEAREST,
+										  .mag_filter        = SDL_GPU_FILTER_NEAREST,
+										  .mipmap_mode       = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+										  .address_mode_u    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+										  .address_mode_v    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+										  .address_mode_w    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+										  .max_anisotropy    = 0,
+										  .enable_anisotropy = false,
+										});
+		rndr.samplers[1] = make_sampler(device, /* Point Wrap */
+		                                SDL_GPUSamplerCreateInfo{
+										  .min_filter        = SDL_GPU_FILTER_NEAREST,
+										  .mag_filter        = SDL_GPU_FILTER_NEAREST,
+										  .mipmap_mode       = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+										  .address_mode_u    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+										  .address_mode_v    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+										  .address_mode_w    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+										  .max_anisotropy    = 0,
+										  .enable_anisotropy = false,
+										});
+		rndr.samplers[2] = make_sampler(device, /* Linear Clamp */
+		                                SDL_GPUSamplerCreateInfo{
+										  .min_filter        = SDL_GPU_FILTER_LINEAR,
+										  .mag_filter        = SDL_GPU_FILTER_LINEAR,
+										  .mipmap_mode       = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR,
+										  .address_mode_u    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+										  .address_mode_v    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+										  .address_mode_w    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+										  .max_anisotropy    = 0,
+										  .enable_anisotropy = false,
+										});
+		rndr.samplers[3] = make_sampler(device, /* Linear Wrap */
+		                                SDL_GPUSamplerCreateInfo{
+										  .min_filter        = SDL_GPU_FILTER_LINEAR,
+										  .mag_filter        = SDL_GPU_FILTER_LINEAR,
+										  .mipmap_mode       = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR,
+										  .address_mode_u    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+										  .address_mode_v    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+										  .address_mode_w    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+										  .max_anisotropy    = 0,
+										  .enable_anisotropy = false,
+										});
+		rndr.samplers[4] = make_sampler(device, /* Anisotropic Clamp */
+		                                SDL_GPUSamplerCreateInfo{
+										  .min_filter        = SDL_GPU_FILTER_LINEAR,
+										  .mag_filter        = SDL_GPU_FILTER_LINEAR,
+										  .mipmap_mode       = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR,
+										  .address_mode_u    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+										  .address_mode_v    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+										  .address_mode_w    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+										  .max_anisotropy    = 4,
+										  .enable_anisotropy = true,
+										});
+		rndr.samplers[5] = make_sampler(device, /* Anisotropic Wrap */
+		                                SDL_GPUSamplerCreateInfo{
+										  .min_filter        = SDL_GPU_FILTER_LINEAR,
+										  .mag_filter        = SDL_GPU_FILTER_LINEAR,
+										  .mipmap_mode       = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR,
+										  .address_mode_u    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+										  .address_mode_v    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+										  .address_mode_w    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+										  .max_anisotropy    = 4,
+										  .enable_anisotropy = true,
+										});
+	}
+
 	// Initialize all Frame objects
 	auto init(const base::sdl_context &ctx,
 	          const io::byte_span vertices,
@@ -625,6 +708,7 @@ namespace frame
 		create_pipelines(ctx, static_cast<uint32_t>(vertices.size() / vertex_count), vertex_attributes, rndr);
 		create_and_copy_vertices_indicies(ctx, vertices, indicies, rndr);
 		create_and_load_texture(ctx, texture_image, rndr);
+		create_samplers(ctx, rndr);
 
 		return rndr;
 	}
