@@ -504,7 +504,6 @@ namespace frame
 			.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
 			.size  = tb_size,
 		};
-
 		auto transfer_buffer = SDL_CreateGPUTransferBuffer(device, &transfer_buffer_info);
 		msg::error(transfer_buffer != nullptr, "Could not create GPU Transfer Buffer");
 
@@ -583,6 +582,7 @@ namespace frame
 		auto copy_cmd = SDL_AcquireGPUCommandBuffer(device);
 		auto copypass = SDL_BeginGPUCopyPass(copy_cmd);
 
+		// Copy data for each layer+mipmap in the array
 		for (auto &&sub_image : texture_image.sub_images)
 		{
 			auto src = SDL_GPUTextureTransferInfo{
