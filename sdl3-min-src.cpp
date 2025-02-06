@@ -484,7 +484,7 @@ namespace frame
 
 		auto vertex_buffer = SDL_CreateGPUBuffer(device, &vb_info);
 		msg::error(vertex_buffer != nullptr, "Could not create GPU Vertex Buffer.");
-
+		SDL_SetGPUBufferName(device, vertex_buffer, "Vertex Buffer");
 		rndr.vertex_buffer = sdl_gpu_buffer_ptr(vertex_buffer, sdl_free_buffer{ device });
 
 		auto ib_info = SDL_GPUBufferCreateInfo{
@@ -494,7 +494,7 @@ namespace frame
 
 		auto index_buffer = SDL_CreateGPUBuffer(device, &ib_info);
 		msg::error(index_buffer != nullptr, "Could not create GPU Vertex Buffer.");
-
+		SDL_SetGPUBufferName(device, index_buffer, "Index Buffer");
 		rndr.index_buffer = sdl_gpu_buffer_ptr(index_buffer, sdl_free_buffer{ device });
 
 		msg::info("Create Transfer Buffer.");
@@ -508,7 +508,7 @@ namespace frame
 		auto transfer_buffer = SDL_CreateGPUTransferBuffer(device, &transfer_buffer_info);
 		msg::error(transfer_buffer != nullptr, "Could not create GPU Transfer Buffer");
 
-		msg::info("Copy vertices and indicies to Transfer Buffer.");
+		msg::info("Upload vertices and indicies to Transfer Buffer.");
 		auto *data = SDL_MapGPUTransferBuffer(device, transfer_buffer, false);
 
 		std::memcpy(data, vertices.data(), vertices.size());
@@ -565,7 +565,7 @@ namespace frame
 		auto texture = SDL_CreateGPUTexture(device, &texture_info);
 		msg::error(texture != nullptr, "Failed to create GPU Texture");
 		rndr.grid_texture = sdl_gpu_texture_ptr(texture, sdl_free_texture{ device });
-
+		SDL_SetGPUTextureName(device, texture, "Sampler Texture");
 		msg::info("Upload texture data to transfer buffer.");
 
 		auto transfer_buffer_info = SDL_GPUTransferBufferCreateInfo{
