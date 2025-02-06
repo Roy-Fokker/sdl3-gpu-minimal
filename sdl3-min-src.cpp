@@ -374,6 +374,8 @@ namespace frame
 		sdl_gpu_buffer_ptr index_buffer;
 		uint32_t vertex_count;
 		uint32_t index_count;
+
+		sdl_gpu_texture_ptr grid_texture;
 	};
 
 	// Create GPU side shader using in-memory shader binary for specified stage
@@ -545,12 +547,73 @@ namespace frame
 		SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
 	}
 
+	void create_and_load_texture(const base::sdl_context &ctx, const io::image_data &texture_image, frame_context &rndr)
+	{
+		auto device = ctx.gpu.get();
+
+		msg::info("Create GPU Texture.");
+
+		auto texture_info = SDL_GPUTextureCreateInfo{
+			.type                 = SDL_GPU_TEXTURETYPE_2D,
+			.format               = texture_image.header.format,
+			.usage                = SDL_GPU_TEXTUREUSAGE_SAMPLER,
+			.width                = texture_image.header.width,
+			.height               = texture_image.header.height,
+			.layer_count_or_depth = texture_image.header.layer_count,
+			.num_levels           = texture_image.header.mipmap_count,
+		};
+		auto texture = SDL_CreateGPUTexture(device, &texture_info);
+		msg::error(texture != nullptr, "Failed to create GPU Texture");
+		rndr.grid_texture = sdl_gpu_texture_ptr(texture, sdl_free_texture{ device });
+
+		msg::info("Upload texture data to transfer buffer.");
+
+		auto transfer_buffer_info = SDL_GPUTransferBufferCreateInfo{
+			.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+			.size  = static_cast<uint32_t>(texture_image.data.size()),
+		};
+		auto transfer_buffer = SDL_CreateGPUTransferBuffer(device, &transfer_buffer_info);
+		msg::error(transfer_buffer != nullptr, "Could not create GPU transfer buffer.");
+
+		auto data = SDL_MapGPUTransferBuffer(device, transfer_buffer, false);
+		std::memcpy(data, texture_image.data.data(), texture_image.data.size());
+		SDL_UnmapGPUTransferBuffer(device, transfer_buffer);
+
+		msg::info("Copy from transfer buffer to texture buffer");
+		auto copy_cmd = SDL_AcquireGPUCommandBuffer(device);
+		auto copypass = SDL_BeginGPUCopyPass(copy_cmd);
+
+		for (auto &&sub_image : texture_image.sub_images)
+		{
+			auto src = SDL_GPUTextureTransferInfo{
+				.transfer_buffer = transfer_buffer,
+				.offset          = static_cast<uint32_t>(sub_image.offset),
+			};
+
+			auto dst = SDL_GPUTextureRegion{
+				.texture   = texture,
+				.mip_level = sub_image.mipmap_index,
+				.layer     = sub_image.layer_index,
+				.w         = sub_image.width,
+				.h         = sub_image.height,
+				.d         = 1,
+			};
+
+			SDL_UploadToGPUTexture(copypass, &src, &dst, false);
+		}
+
+		SDL_EndGPUCopyPass(copypass);
+		SDL_SubmitGPUCommandBuffer(copy_cmd);
+		SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
+	}
+
 	// Initialize all Frame objects
 	auto init(const base::sdl_context &ctx,
 	          const io::byte_span vertices,
 	          const io::byte_span indicies,
 	          uint32_t vertex_count, uint32_t index_count,
-	          const std::span<const SDL_GPUVertexAttribute> vertex_attributes) -> frame_context
+	          const std::span<const SDL_GPUVertexAttribute> vertex_attributes,
+	          const io::image_data &texture_image) -> frame_context
 	{
 		msg::info("Initialize frame objects");
 
@@ -561,6 +624,7 @@ namespace frame
 
 		create_pipelines(ctx, static_cast<uint32_t>(vertices.size() / vertex_count), vertex_attributes, rndr);
 		create_and_copy_vertices_indicies(ctx, vertices, indicies, rndr);
+		create_and_load_texture(ctx, texture_image, rndr);
 
 		return rndr;
 	}
@@ -688,7 +752,8 @@ auto main() -> int
 	                        io::as_byte_span(shape),
 	                        io::as_byte_span(shape_indices),
 	                        vertex_count, index_count,
-	                        app::pos_clr_vertex::vertex_attributes);
+	                        app::pos_clr_vertex::vertex_attributes,
+	                        grid_texture);
 
 	auto quit = false;
 	auto evnt = SDL_Event{};
