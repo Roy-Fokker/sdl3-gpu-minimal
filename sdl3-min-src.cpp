@@ -516,9 +516,9 @@ namespace frame
 
 		SDL_UnmapGPUTransferBuffer(device, transfer_buffer);
 
-		msg::info("Upload from Transfer Buffer to Vertex Buffer and Index Buffer.");
-		auto upload_cmd = SDL_AcquireGPUCommandBuffer(device);
-		auto copypass   = SDL_BeginGPUCopyPass(upload_cmd);
+		msg::info("Copy from Transfer Buffer to Vertex Buffer and Index Buffer.");
+		auto copy_cmd = SDL_AcquireGPUCommandBuffer(device);
+		auto copypass = SDL_BeginGPUCopyPass(copy_cmd);
 
 		auto src = SDL_GPUTransferBufferLocation{
 			.transfer_buffer = transfer_buffer,
@@ -543,7 +543,7 @@ namespace frame
 		SDL_UploadToGPUBuffer(copypass, &src, &dst, false);
 
 		SDL_EndGPUCopyPass(copypass);
-		SDL_SubmitGPUCommandBuffer(upload_cmd);
+		SDL_SubmitGPUCommandBuffer(copy_cmd);
 		SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
 	}
 
