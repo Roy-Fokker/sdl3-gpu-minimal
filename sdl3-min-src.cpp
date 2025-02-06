@@ -41,7 +41,7 @@ namespace msg
 	}
 
 	// if there is an error, print message then assert
-	void error(bool condition,
+	void error(bool condition, // true condition, if this is false it is an error
 	           const std::string_view message,
 	           const std::source_location location = std::source_location::current())
 	{
