@@ -382,7 +382,13 @@ namespace frame
 	};
 
 	// Create GPU side shader using in-memory shader binary for specified stage
-	auto load_gpu_shader(const base::sdl_context &ctx, const io::byte_span &bin, SDL_GPUShaderStage stage) -> sdl_gpu_shader_ptr
+	auto load_gpu_shader(const base::sdl_context &ctx,
+	                     const io::byte_span &bin,
+	                     SDL_GPUShaderStage stage,
+	                     uint32_t sampler_count,
+	                     uint32_t uniform_buffer_count,
+	                     uint32_t storage_buffer_count,
+	                     uint32_t storage_texture_count) -> sdl_gpu_shader_ptr
 	{
 		auto shader_format = [&]() -> SDL_GPUShaderFormat {
 			auto backend_formats = SDL_GetGPUShaderFormats(ctx.gpu.get());
@@ -394,11 +400,15 @@ namespace frame
 		}();
 
 		auto shader_info = SDL_GPUShaderCreateInfo{
-			.code_size  = bin.size(),
-			.code       = reinterpret_cast<const std::uint8_t *>(bin.data()),
-			.entrypoint = "main", // Assume shader's entry point is always main
-			.format     = shader_format,
-			.stage      = stage,
+			.code_size            = bin.size(),
+			.code                 = reinterpret_cast<const std::uint8_t *>(bin.data()),
+			.entrypoint           = "main", // Assume shader's entry point is always main
+			.format               = shader_format,
+			.stage                = stage,
+			.num_samplers         = sampler_count,
+			.num_storage_textures = storage_texture_count,
+			.num_storage_buffers  = storage_buffer_count,
+			.num_uniform_buffers  = uniform_buffer_count,
 		};
 
 		auto shader = SDL_CreateGPUShader(ctx.gpu.get(), &shader_info);
@@ -420,8 +430,8 @@ namespace frame
 		auto vs_bin = io::read_file("shaders/instanced_shapes.vs_6_4.cso");
 		auto fs_bin = io::read_file("shaders/raw_triangle.ps_6_4.cso");
 
-		auto vs_shdr = load_gpu_shader(ctx, vs_bin, SDL_GPU_SHADERSTAGE_VERTEX);
-		auto fs_shdr = load_gpu_shader(ctx, fs_bin, SDL_GPU_SHADERSTAGE_FRAGMENT);
+		auto vs_shdr = load_gpu_shader(ctx, vs_bin, SDL_GPU_SHADERSTAGE_VERTEX, 0, 0, 0, 0);
+		auto fs_shdr = load_gpu_shader(ctx, fs_bin, SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0, 0, 0);
 
 		auto vertex_description = SDL_GPUVertexBufferDescription{
 			.slot               = 0,
