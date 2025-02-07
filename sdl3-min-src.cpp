@@ -8,7 +8,14 @@
 // DDSKTX_IMPLEMENT must be defined in exactly one translation unit
 // doesn't matter for this example, but it's good practice to define it in the same file as the implementation
 #define DDSKTX_IMPLEMENT
-#include "dds-ktx.h"
+#include <dds-ktx.h>
+
+// GLM configuration and headers
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE // GLM clip space should be in Z-axis to 0 to 1
+#define GLM_FORCE_LEFT_HANDED       // GLM should use left-handed coordinates, +z goes into screen
+#define GLM_FORCE_RADIANS           // GLM should always use radians not degrees.
+#include <glm/glm.hpp>              // Required for glm::vec3/4/mat4/etc
+#include <glm/ext.hpp>              // Required for glm::perspective function
 
 // Standard Library module
 import std;
@@ -805,8 +812,8 @@ namespace app
 {
 	struct pos_uv_vertex
 	{
-		float x, y, z;
-		float u, v;
+		glm::vec3 pos;
+		glm::vec2 uv;
 
 		constexpr static auto vertex_attributes = std::array{
 			SDL_GPUVertexAttribute{
@@ -857,10 +864,10 @@ auto main() -> int
 	auto ctx = base::init(window_width, window_height, app_title);
 
 	auto shape = std::array{
-		app::pos_uv_vertex{ -1.f, -1.f, 0.f, 0.f, 1.f },
-		app::pos_uv_vertex{ +1.f, -1.f, 0.f, 1.f, 1.f },
-		app::pos_uv_vertex{ +1.f, +1.f, 0.f, 1.f, 0.f },
-		app::pos_uv_vertex{ -1.f, +1.f, 0.f, 0.f, 0.f },
+		app::pos_uv_vertex{ { -1.f, -1.f, 0.f }, { 0.f, 1.f } },
+		app::pos_uv_vertex{ { +1.f, -1.f, 0.f }, { 1.f, 1.f } },
+		app::pos_uv_vertex{ { +1.f, +1.f, 0.f }, { 1.f, 0.f } },
+		app::pos_uv_vertex{ { -1.f, +1.f, 0.f }, { 0.f, 0.f } },
 	};
 	auto shape_indices = std::array{
 		0, 1, 2,
@@ -878,6 +885,8 @@ auto main() -> int
 	                        vertex_count, index_count,
 	                        app::pos_uv_vertex::vertex_attributes,
 	                        grid_texture);
+
+	grid_texture = {}; // don't need it once data is uploaded to gpu
 
 	auto quit = false;
 	auto evnt = SDL_Event{};
