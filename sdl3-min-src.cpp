@@ -427,8 +427,8 @@ namespace frame
 
 		msg::info("Creating Pipelines.");
 
-		auto vs_bin = io::read_file("shaders/instanced_shapes.vs_6_4.cso");
-		auto fs_bin = io::read_file("shaders/raw_triangle.ps_6_4.cso");
+		auto vs_bin = io::read_file("shaders/textured_quad.vs_6_4.cso");
+		auto fs_bin = io::read_file("shaders/textured_quad.ps_6_4.cso");
 
 		auto vs_shdr = load_gpu_shader(ctx, vs_bin, SDL_GPU_SHADERSTAGE_VERTEX, 0, 0, 0, 0);
 		auto fs_shdr = load_gpu_shader(ctx, fs_bin, SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0, 0, 0);
@@ -774,8 +774,14 @@ namespace frame
 			.offset = 0,
 		};
 
+		auto sampler_binding = SDL_GPUTextureSamplerBinding{
+			.texture = rndr.grid_texture.get(),
+			.sampler = rndr.samplers[0].get(),
+		};
+
 		SDL_BindGPUVertexBuffers(renderpass, 0, &vertex_bindings, 1);
 		SDL_BindGPUIndexBuffer(renderpass, &index_bindings, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+		SDL_BindGPUFragmentSamplers(renderpass, 0, &sampler_binding, 1);
 
 		SDL_BindGPUGraphicsPipeline(renderpass, rndr.pipeline.get());
 		SDL_DrawGPUIndexedPrimitives(renderpass,
@@ -796,10 +802,10 @@ namespace frame
  */
 namespace app
 {
-	struct pos_clr_vertex
+	struct pos_uv_vertex
 	{
 		float x, y, z;
-		uint8_t r, g, b, a;
+		float u, v;
 
 		constexpr static auto vertex_attributes = std::array{
 			SDL_GPUVertexAttribute{
@@ -811,7 +817,7 @@ namespace app
 			SDL_GPUVertexAttribute{
 			  .location    = 1,
 			  .buffer_slot = 0,
-			  .format      = SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM,
+			  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
 			  .offset      = sizeof(float) * 3,
 			}
 		};
@@ -827,10 +833,10 @@ auto main() -> int
 	auto ctx = base::init(window_width, window_height, app_title);
 
 	auto shape = std::array{
-		app::pos_clr_vertex{ -1.f, -1.f, 0.f, 0, 0, 255, 255 },
-		app::pos_clr_vertex{ 1.f, -1.f, 0.f, 0, 255, 0, 255 },
-		app::pos_clr_vertex{ 1.f, 1.f, 0.f, 255, 0, 0, 255 },
-		app::pos_clr_vertex{ -1.f, 1.f, 0.f, 255, 255, 0, 255 },
+		app::pos_uv_vertex{ -1.f, -1.f, 0.f, 0.f, 0.f },
+		app::pos_uv_vertex{ +1.f, -1.f, 0.f, 1.f, 0.f },
+		app::pos_uv_vertex{ +1.f, +1.f, 0.f, 1.f, 1.f },
+		app::pos_uv_vertex{ -1.f, +1.f, 0.f, 0.f, 1.f },
 	};
 	auto shape_indices = std::array{
 		0, 1, 2,
@@ -846,7 +852,7 @@ auto main() -> int
 	                        io::as_byte_span(shape),
 	                        io::as_byte_span(shape_indices),
 	                        vertex_count, index_count,
-	                        app::pos_clr_vertex::vertex_attributes,
+	                        app::pos_uv_vertex::vertex_attributes,
 	                        grid_texture);
 
 	auto quit = false;
