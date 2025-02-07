@@ -29,6 +29,11 @@ Build Tools
 - Windows SDK & MSVC build tools
 - clang-tidy & clang-format
 
+## Depends on
+Apart from prerequisite tools above, this project also depends on follow libraries; all loaded via `vcpkg`.
+- [SDL3](https://github.com/libsdl-org/SDL): SDL 3.2 from vcpkg repository.
+- [DDS-KTX](https://github.com/septag/dds-ktx): DDS/KTX image file loader via vcpkg project overlay functionality, as this library is not available in vcpkg repo.
+
 ## Configure and Build
 In project root, from VS command prompt
 ```shell
@@ -51,8 +56,9 @@ Each tag, modifies previous tag's sources.
 - [Basic Stencil](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/4-basic-stencil): Basic stencil operation. Substract mask from triangle.
 - [Index Buffer Shape](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/5-index-buffer): Draw a shape using Index Buffer.
 - [Instance Shapes](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/6-instance-shapes): Slight tweak of previous, simple change to vertex shader and increase instance count in cpp.
-- Basic Texture
-- Basic Depth Buffer
+- [Basic Texture](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/7-basic-texture): Load a texture with mipmaps and use it with previous. Change Sampler type with key 1-6.
+- [Basic Cubes](#): Draw multiple textured cubes with perspective projection
+- [Basic Depth Buffer](#): Use depth buffer to show cubes in proper order.
 
 ## References
 - <https://github.com/TheSpydog/SDL_gpu_examples> : my code is basically following this repo as example/source. But without "framework" portion so I can understand it better.
