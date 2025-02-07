@@ -379,6 +379,7 @@ namespace frame
 
 		sdl_gpu_texture_ptr grid_texture;
 		std::array<sdl_gpu_sampler_ptr, 6> samplers;
+		uint8_t active_sampler = 0;
 	};
 
 	// Create GPU side shader using in-memory shader binary for specified stage
@@ -776,7 +777,7 @@ namespace frame
 
 		auto sampler_binding = SDL_GPUTextureSamplerBinding{
 			.texture = rndr.grid_texture.get(),
-			.sampler = rndr.samplers[0].get(),
+			.sampler = rndr.samplers[rndr.active_sampler].get(),
 		};
 
 		SDL_BindGPUVertexBuffers(renderpass, 0, &vertex_bindings, 1);
@@ -822,6 +823,29 @@ namespace app
 			}
 		};
 	};
+
+	void update(frame::frame_context &rndr)
+	{
+		auto *key_states = SDL_GetKeyboardState(NULL);
+
+		auto prv = rndr.active_sampler;
+
+		if (key_states[SDL_SCANCODE_1])
+			rndr.active_sampler = 0;
+		else if (key_states[SDL_SCANCODE_2])
+			rndr.active_sampler = 1;
+		else if (key_states[SDL_SCANCODE_3])
+			rndr.active_sampler = 2;
+		else if (key_states[SDL_SCANCODE_4])
+			rndr.active_sampler = 3;
+		else if (key_states[SDL_SCANCODE_5])
+			rndr.active_sampler = 4;
+		else if (key_states[SDL_SCANCODE_6])
+			rndr.active_sampler = 5;
+
+		if (prv != rndr.active_sampler)
+			msg::info(std::format("Change sampler to {}", rndr.active_sampler));
+	}
 }
 
 auto main() -> int
@@ -833,10 +857,10 @@ auto main() -> int
 	auto ctx = base::init(window_width, window_height, app_title);
 
 	auto shape = std::array{
-		app::pos_uv_vertex{ -1.f, -1.f, 0.f, 0.f, 0.f },
-		app::pos_uv_vertex{ +1.f, -1.f, 0.f, 1.f, 0.f },
-		app::pos_uv_vertex{ +1.f, +1.f, 0.f, 1.f, 1.f },
-		app::pos_uv_vertex{ -1.f, +1.f, 0.f, 0.f, 1.f },
+		app::pos_uv_vertex{ -1.f, -1.f, 0.f, 0.f, 1.f },
+		app::pos_uv_vertex{ +1.f, -1.f, 0.f, 1.f, 1.f },
+		app::pos_uv_vertex{ +1.f, +1.f, 0.f, 1.f, 0.f },
+		app::pos_uv_vertex{ -1.f, +1.f, 0.f, 0.f, 0.f },
 	};
 	auto shape_indices = std::array{
 		0, 1, 2,
@@ -877,6 +901,7 @@ auto main() -> int
 				}
 			}
 		}
+		app::update(rndr);
 
 		frame::draw(ctx, rndr);
 	}
