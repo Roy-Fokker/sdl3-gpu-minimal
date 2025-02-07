@@ -31,8 +31,9 @@ Build Tools
 
 ## Depends on
 Apart from prerequisite tools above, this project also depends on follow libraries; all loaded via `vcpkg`.
-- [SDL3](https://github.com/libsdl-org/SDL): SDL 3.2 from vcpkg repository.
+- [SDL3](https://github.com/libsdl-org/SDL): SDL 3.2, main focus of this repo.
 - [DDS-KTX](https://github.com/septag/dds-ktx): DDS/KTX image file loader via vcpkg project overlay functionality, as this library is not available in vcpkg repo.
+- [GLM](https://github.com/g-truc/glm): OpenGL Math Library, not just for OpenGL.
 
 ## Configure and Build
 In project root, from VS command prompt
