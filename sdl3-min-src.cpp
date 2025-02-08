@@ -908,7 +908,17 @@ namespace app
 			rndr.active_sampler = 5;
 
 		if (prv != rndr.active_sampler)
-			msg::info(std::format("Change sampler to {}", rndr.active_sampler));
+		{
+			constexpr auto sampler_name = std::array{
+				"Point Clamp"sv,
+				"Point Wrap"sv,
+				"Linear Clamp"sv,
+				"Linear Wrap"sv,
+				"Anisotropic Clamp"sv,
+				"Anisotropic Wrap"sv,
+			};
+			msg::info(std::format("Change sampler to {}", sampler_name.at(rndr.active_sampler)));
+		}
 	}
 
 	struct mesh
