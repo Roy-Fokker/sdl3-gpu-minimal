@@ -435,7 +435,7 @@ namespace frame
 
 		msg::info("Creating Pipelines.");
 
-		auto vs_bin = io::read_file("shaders/textured_quad.vs_6_4.cso");
+		auto vs_bin = io::read_file("shaders/textured_mesh.vs_6_4.cso");
 		auto fs_bin = io::read_file("shaders/textured_quad.ps_6_4.cso");
 
 		auto vs_shdr = load_gpu_shader(ctx, vs_bin, SDL_GPU_SHADERSTAGE_VERTEX, 0, 0, 0, 0);
@@ -777,24 +777,24 @@ namespace frame
 			.buffer = rndr.vertex_buffer.get(),
 			.offset = 0,
 		};
+		SDL_BindGPUVertexBuffers(renderpass, 0, &vertex_bindings, 1);
+
 		auto index_bindings = SDL_GPUBufferBinding{
 			.buffer = rndr.index_buffer.get(),
 			.offset = 0,
 		};
+		SDL_BindGPUIndexBuffer(renderpass, &index_bindings, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
 		auto sampler_binding = SDL_GPUTextureSamplerBinding{
 			.texture = rndr.grid_texture.get(),
 			.sampler = rndr.samplers[rndr.active_sampler].get(),
 		};
-
-		SDL_BindGPUVertexBuffers(renderpass, 0, &vertex_bindings, 1);
-		SDL_BindGPUIndexBuffer(renderpass, &index_bindings, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 		SDL_BindGPUFragmentSamplers(renderpass, 0, &sampler_binding, 1);
 
 		SDL_BindGPUGraphicsPipeline(renderpass, rndr.pipeline.get());
 		SDL_DrawGPUIndexedPrimitives(renderpass,
 		                             rndr.index_count,
-		                             16,
+		                             1,
 		                             0,
 		                             0,
 		                             0);
@@ -853,6 +853,67 @@ namespace app
 		if (prv != rndr.active_sampler)
 			msg::info(std::format("Change sampler to {}", rndr.active_sampler));
 	}
+
+	struct mesh
+	{
+		std::vector<pos_uv_vertex> vertices;
+		std::vector<uint32_t> indices;
+	};
+
+	constexpr auto make_cube() -> mesh
+	{
+		auto vertices = std::vector<pos_uv_vertex>{
+			// +X face
+			{ { 1.f, -1.f, -1.f }, { 0.f, 1.f } },
+			{ { 1.f, -1.f, +1.f }, { 0.f, 0.f } },
+			{ { 1.f, +1.f, +1.f }, { 1.f, 0.f } },
+			{ { 1.f, +1.f, -1.f }, { 1.f, 1.f } },
+			// -X face
+			{ { -1.f, -1.f, -1.f }, { 0.f, 1.f } },
+			{ { -1.f, +1.f, -1.f }, { 1.f, 1.f } },
+			{ { -1.f, +1.f, +1.f }, { 1.f, 0.f } },
+			{ { -1.f, -1.f, +1.f }, { 0.f, 0.f } },
+			// +Y face
+			{ { -1.f, 1.f, -1.f }, { 0.f, 1.f } },
+			{ { +1.f, 1.f, -1.f }, { 1.f, 1.f } },
+			{ { +1.f, 1.f, +1.f }, { 1.f, 0.f } },
+			{ { -1.f, 1.f, +1.f }, { 0.f, 0.f } },
+			// -Y face
+			{ { -1.f, -1.f, -1.f }, { 0.f, 1.f } },
+			{ { -1.f, -1.f, +1.f }, { 0.f, 0.f } },
+			{ { +1.f, -1.f, +1.f }, { 1.f, 0.f } },
+			{ { +1.f, -1.f, -1.f }, { 1.f, 1.f } },
+			// +Z face
+			{ { -1.f, -1.f, 1.f }, { 0.f, 1.f } },
+			{ { -1.f, +1.f, 1.f }, { 0.f, 0.f } },
+			{ { +1.f, +1.f, 1.f }, { 1.f, 0.f } },
+			{ { +1.f, -1.f, 1.f }, { 1.f, 1.f } },
+			// -Z face
+			{ { -1.f, -1.f, -1.f }, { 0.f, 1.f } },
+			{ { +1.f, -1.f, -1.f }, { 1.f, 1.f } },
+			{ { +1.f, +1.f, -1.f }, { 1.f, 0.f } },
+			{ { -1.f, +1.f, -1.f }, { 0.f, 0.f } },
+		};
+
+		auto face_0 = std::vector<uint32_t>{
+			0, 1, 2, //
+			0, 2, 3, //
+		};
+		auto f_idxs = std::views::iota(0, 6);
+		auto f_rng  = std::views::cartesian_product(f_idxs, face_0) |
+		             std::views::transform([](const auto &&f_pair) -> uint32_t {
+			auto [f_idx, v_idx] = f_pair;
+
+			return v_idx + (f_idx * 4);
+		});
+
+		auto indices = f_rng | std::ranges::to<std::vector>();
+
+		return {
+			vertices,
+			indices,
+		};
+	}
 }
 
 auto main() -> int
@@ -863,25 +924,16 @@ auto main() -> int
 
 	auto ctx = base::init(window_width, window_height, app_title);
 
-	auto shape = std::array{
-		app::pos_uv_vertex{ { -1.f, -1.f, 0.f }, { 0.f, 1.f } },
-		app::pos_uv_vertex{ { +1.f, -1.f, 0.f }, { 1.f, 1.f } },
-		app::pos_uv_vertex{ { +1.f, +1.f, 0.f }, { 1.f, 0.f } },
-		app::pos_uv_vertex{ { -1.f, +1.f, 0.f }, { 0.f, 0.f } },
-	};
-	auto shape_indices = std::array{
-		0, 1, 2,
-		0, 2, 3
-	};
+	auto shape     = app::make_cube();
 
-	auto vertex_count = static_cast<uint32_t>(shape.size());
-	auto index_count  = static_cast<uint32_t>(shape_indices.size());
+	auto vertex_count = static_cast<uint32_t>(shape.vertices.size());
+	auto index_count  = static_cast<uint32_t>(shape.indices.size());
 
 	auto grid_texture = io::read_image_file("data/uv_grid.dds");
 
 	auto rndr = frame::init(ctx,
-	                        io::as_byte_span(shape),
-	                        io::as_byte_span(shape_indices),
+	                        io::as_byte_span(shape.vertices),
+	                        io::as_byte_span(shape.indices),
 	                        vertex_count, index_count,
 	                        app::pos_uv_vertex::vertex_attributes,
 	                        grid_texture);
