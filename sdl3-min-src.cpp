@@ -387,6 +387,8 @@ namespace frame
 		sdl_gpu_texture_ptr grid_texture;
 		std::array<sdl_gpu_sampler_ptr, 6> samplers;
 		uint8_t active_sampler = 0;
+
+		io::byte_span view_proj;
 	};
 
 	// Create GPU side shader using in-memory shader binary for specified stage
@@ -438,7 +440,7 @@ namespace frame
 		auto vs_bin = io::read_file("shaders/textured_mesh.vs_6_4.cso");
 		auto fs_bin = io::read_file("shaders/textured_quad.ps_6_4.cso");
 
-		auto vs_shdr = load_gpu_shader(ctx, vs_bin, SDL_GPU_SHADERSTAGE_VERTEX, 0, 0, 0, 0);
+		auto vs_shdr = load_gpu_shader(ctx, vs_bin, SDL_GPU_SHADERSTAGE_VERTEX, 0, 1, 0, 0);
 		auto fs_shdr = load_gpu_shader(ctx, fs_bin, SDL_GPU_SHADERSTAGE_FRAGMENT, 1, 0, 0, 0);
 
 		auto vertex_description = SDL_GPUVertexBufferDescription{
@@ -469,7 +471,7 @@ namespace frame
 
 			.rasterizer_state = {
 			  .fill_mode  = SDL_GPU_FILLMODE_FILL,
-			  .cull_mode  = SDL_GPU_CULLMODE_NONE,
+			  .cull_mode  = SDL_GPU_CULLMODE_BACK,
 			  .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
 			},
 
@@ -714,13 +716,15 @@ namespace frame
 	          const io::byte_span indicies,
 	          uint32_t vertex_count, uint32_t index_count,
 	          const std::span<const SDL_GPUVertexAttribute> vertex_attributes,
-	          const io::image_data &texture_image) -> frame_context
+	          const io::image_data &texture_image,
+	          const io::byte_span &view_proj) -> frame_context
 	{
 		msg::info("Initialize frame objects");
 
 		auto rndr = frame_context{
 			.vertex_count = vertex_count,
 			.index_count  = index_count,
+			.view_proj    = view_proj,
 		};
 
 		create_pipelines(ctx, static_cast<uint32_t>(vertices.size() / vertex_count), vertex_attributes, rndr);
@@ -771,7 +775,8 @@ namespace frame
 			cmd_buf,
 			&color_target_info,
 			1,
-			NULL);
+
+		SDL_PushGPUVertexUniformData(cmd_buf, 0, rndr.view_proj.data(), static_cast<uint32_t>(rndr.view_proj.size()));
 
 		auto vertex_bindings = SDL_GPUBufferBinding{
 			.buffer = rndr.vertex_buffer.get(),
@@ -914,6 +919,20 @@ namespace app
 			indices,
 		};
 	}
+
+	auto get_projection(uint32_t width, uint32_t height) -> glm::mat4
+	{
+		auto fov          = glm::radians(90.0f);
+		auto aspect_ratio = static_cast<float>(width) / height;
+
+		auto projection = glm::perspective(fov, aspect_ratio, 0.f, 100.f);
+		auto view       = glm::lookAt(
+            glm::vec3(-2.f, -2.f, -2.f),
+            glm::vec3(0.f, 0.f, 0.f),
+            glm::vec3(0.f, 1.f, 0.f));
+
+		return projection * view;
+	}
 }
 
 auto main() -> int
@@ -925,6 +944,7 @@ auto main() -> int
 	auto ctx = base::init(window_width, window_height, app_title);
 
 	auto shape     = app::make_cube();
+	auto view_proj = app::get_projection(window_width, window_height);
 
 	auto vertex_count = static_cast<uint32_t>(shape.vertices.size());
 	auto index_count  = static_cast<uint32_t>(shape.indices.size());
@@ -936,7 +956,8 @@ auto main() -> int
 	                        io::as_byte_span(shape.indices),
 	                        vertex_count, index_count,
 	                        app::pos_uv_vertex::vertex_attributes,
-	                        grid_texture);
+	                        grid_texture,
+	                        io::as_byte_span(view_proj));
 
 	grid_texture = {}; // don't need it once data is uploaded to gpu
 
