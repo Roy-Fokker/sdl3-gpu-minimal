@@ -377,6 +377,8 @@ namespace frame
 	// Structure to hold objects required to draw a frame
 	struct frame_context
 	{
+		sdl_gpu_texture_ptr depth_texture;
+
 		sdl_gfx_pipeline_ptr pipeline;
 
 		sdl_gpu_buffer_ptr vertex_buffer;
@@ -463,6 +465,14 @@ namespace frame
 			}
 		};
 
+		auto depth_stencil = SDL_GPUDepthStencilState{
+			.compare_op          = SDL_GPU_COMPAREOP_EQUAL,
+			.write_mask          = 0xff,
+			.enable_depth_test   = true,
+			.enable_depth_write  = true,
+			.enable_stencil_test = false,
+		};
+
 		auto pipeline_info = SDL_GPUGraphicsPipelineCreateInfo{
 			.vertex_shader      = vs_shdr.get(),
 			.fragment_shader    = fs_shdr.get(),
@@ -475,9 +485,13 @@ namespace frame
 			  .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
 			},
 
+			.depth_stencil_state = depth_stencil,
+
 			.target_info = {
 			  .color_target_descriptions = color_targets.data(),
 			  .num_color_targets         = static_cast<uint32_t>(color_targets.size()),
+			  .depth_stencil_format      = SDL_GPU_TEXTUREFORMAT_D16_UNORM,
+			  .has_depth_stencil_target  = true,
 			},
 		};
 
@@ -567,6 +581,31 @@ namespace frame
 		SDL_EndGPUCopyPass(copypass);
 		SDL_SubmitGPUCommandBuffer(copy_cmd);
 		SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
+	}
+
+	void create_depth_texture(const base::sdl_context &ctx, frame_context &rndr)
+	{
+		auto device = ctx.gpu.get();
+
+		int width = 0, height = 0;
+		SDL_GetWindowSizeInPixels(ctx.window.get(), &width, &height);
+
+		msg::info("Create Depth Stencil Texture");
+
+		auto texture_info = SDL_GPUTextureCreateInfo{
+			.type                 = SDL_GPU_TEXTURETYPE_2D,
+			.format               = SDL_GPU_TEXTUREFORMAT_D16_UNORM,
+			.usage                = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET,
+			.width                = static_cast<uint32_t>(width),
+			.height               = static_cast<uint32_t>(height),
+			.layer_count_or_depth = 1,
+			.num_levels           = 1,
+			.sample_count         = SDL_GPU_SAMPLECOUNT_1,
+		};
+
+		auto depth_texture = SDL_CreateGPUTexture(device, &texture_info);
+		msg::error(depth_texture != nullptr, "Failed to create depth texture.");
+		rndr.depth_texture = sdl_gpu_texture_ptr(depth_texture, sdl_free_texture{ device });
 	}
 
 	void create_and_load_texture(const base::sdl_context &ctx, const io::image_data &texture_image, frame_context &rndr)
@@ -730,6 +769,7 @@ namespace frame
 		create_pipelines(ctx, static_cast<uint32_t>(vertices.size() / vertex_count), vertex_attributes, rndr);
 		create_and_copy_vertices_indicies(ctx, vertices, indicies, rndr);
 		create_and_load_texture(ctx, texture_image, rndr);
+		create_depth_texture(ctx, rndr);
 		create_samplers(ctx, rndr);
 
 		return rndr;
@@ -771,10 +811,22 @@ namespace frame
 			.store_op    = SDL_GPU_STOREOP_STORE,
 		};
 
+		auto depth_target_info = SDL_GPUDepthStencilTargetInfo{
+			.texture          = rndr.depth_texture.get(),
+			.clear_depth      = 1,
+			.load_op          = SDL_GPU_LOADOP_CLEAR,
+			.store_op         = SDL_GPU_STOREOP_STORE,
+			.stencil_load_op  = SDL_GPU_LOADOP_CLEAR,
+			.stencil_store_op = SDL_GPU_STOREOP_STORE,
+			.cycle            = true,
+			.clear_stencil    = 0,
+		};
+
 		auto renderpass = SDL_BeginGPURenderPass(
 			cmd_buf,
 			&color_target_info,
 			1,
+			&depth_target_info);
 
 		SDL_PushGPUVertexUniformData(cmd_buf, 0, rndr.view_proj.data(), static_cast<uint32_t>(rndr.view_proj.size()));
 
