@@ -1020,9 +1020,9 @@ namespace app
 
 	auto get_cube_instances() -> std::vector<instance_data>
 	{
-		auto cube_1 = glm::translate(glm::mat4(1.f), glm::vec3{ 2.f, 0.f, 0.f });
+		auto cube_1 = glm::translate(glm::mat4(1.f), glm::vec3{ 1.f, 0.f, 0.f });
 
-		auto cube_2 = glm::translate(glm::mat4(1.0f), glm::vec3{ -2.f, 0.f, 0.f });
+		auto cube_2 = glm::translate(glm::mat4(1.0f), glm::vec3{ 0.f, 0.5f, 3.f });
 		cube_2      = glm::rotate(cube_2, glm::radians(45.0f), glm::vec3{ 0.f, 0.f, 1.f });
 
 		return {
