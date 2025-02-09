@@ -58,8 +58,7 @@ Each tag, modifies previous tag's sources.
 - [Index Buffer Shape](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/5-index-buffer): Draw a shape using Index Buffer.
 - [Instance Shapes](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/6-instance-shapes): Slight tweak of previous, simple change to vertex shader and increase instance count in cpp.
 - [Basic Texture](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/7-basic-texture): Load a texture with mipmaps and use it with previous. Change Sampler type with key 1-6.
-- [Basic Cubes](#): Draw multiple textured cubes with perspective projection
-- [Basic Depth Buffer](#): Use depth buffer to show cubes in proper order.
+- [Instanced Cubes with depth testing](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/8-instanced-cubes): Draw multiple textured cubes with perspective projection, with depth buffer testing.
 
 ## References
 - <https://github.com/TheSpydog/SDL_gpu_examples> : my code is basically following this repo as example/source. But without "framework" portion so I can understand it better.
