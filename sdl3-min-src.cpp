@@ -466,7 +466,7 @@ namespace frame
 		};
 
 		auto depth_stencil = SDL_GPUDepthStencilState{
-			.compare_op          = SDL_GPU_COMPAREOP_EQUAL,
+			.compare_op          = SDL_GPU_COMPAREOP_LESS,
 			.write_mask          = 0xff,
 			.enable_depth_test   = true,
 			.enable_depth_write  = true,
@@ -594,7 +594,7 @@ namespace frame
 
 		auto texture_info = SDL_GPUTextureCreateInfo{
 			.type                 = SDL_GPU_TEXTURETYPE_2D,
-			.format               = SDL_GPU_TEXTUREFORMAT_D16_UNORM,
+			.format               = SDL_GPU_TEXTUREFORMAT_D32_FLOAT_S8_UINT,
 			.usage                = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET,
 			.width                = static_cast<uint32_t>(width),
 			.height               = static_cast<uint32_t>(height),
