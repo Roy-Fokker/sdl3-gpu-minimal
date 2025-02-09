@@ -504,7 +504,7 @@ namespace frame
 			.target_info = {
 			  .color_target_descriptions = color_targets.data(),
 			  .num_color_targets         = static_cast<uint32_t>(color_targets.size()),
-			  .depth_stencil_format      = SDL_GPU_TEXTUREFORMAT_D16_UNORM,
+			  .depth_stencil_format      = SDL_GPU_TEXTUREFORMAT_D24_UNORM,
 			  .has_depth_stencil_target  = true,
 			},
 		};
@@ -623,8 +623,8 @@ namespace frame
 
 		auto texture_info = SDL_GPUTextureCreateInfo{
 			.type                 = SDL_GPU_TEXTURETYPE_2D,
-			.format               = SDL_GPU_TEXTUREFORMAT_D32_FLOAT_S8_UINT,
-			.usage                = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET,
+			.format               = SDL_GPU_TEXTUREFORMAT_D24_UNORM,
+			.usage                = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET,
 			.width                = static_cast<uint32_t>(width),
 			.height               = static_cast<uint32_t>(height),
 			.layer_count_or_depth = 1,
@@ -887,7 +887,7 @@ namespace frame
 
 		auto depth_target_info = SDL_GPUDepthStencilTargetInfo{
 			.texture          = rndr.depth_texture.get(),
-			.clear_depth      = 1,
+			.clear_depth      = 1.0f,
 			.load_op          = SDL_GPU_LOADOP_CLEAR,
 			.store_op         = SDL_GPU_STOREOP_STORE,
 			.stencil_load_op  = SDL_GPU_LOADOP_CLEAR,
@@ -1023,7 +1023,7 @@ namespace app
 		auto cube_1 = glm::translate(glm::mat4(1.f), glm::vec3{ 1.f, 0.f, 0.f });
 
 		auto cube_2 = glm::translate(glm::mat4(1.0f), glm::vec3{ 0.f, 0.5f, 3.f });
-		cube_2      = glm::rotate(cube_2, glm::radians(45.0f), glm::vec3{ 0.f, 0.f, 1.f });
+		cube_2      = glm::rotate(cube_2, glm::radians(45.0f), glm::vec3{ 0.f, 1.f, 1.f });
 
 		return {
 			{ cube_1 },
