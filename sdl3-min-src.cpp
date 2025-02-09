@@ -776,6 +776,10 @@ namespace frame
 										  .max_anisotropy    = 4,
 										  .enable_anisotropy = true,
 										});
+
+		rndr.active_sampler = 5;
+	}
+
 	void update_instance_buffer(const base::sdl_context &ctx, const io::byte_span instances, frame_context &rndr)
 	{
 		auto device = ctx.gpu.get();
@@ -1033,10 +1037,9 @@ namespace app
 		auto aspect_ratio = static_cast<float>(width) / height;
 
 		auto projection = glm::perspective(fov, aspect_ratio, 0.f, 100.f);
-		auto view       = glm::lookAt(
-            glm::vec3(-2.f, -2.f, -2.f),
-            glm::vec3(0.f, 0.f, 0.f),
-            glm::vec3(0.f, 1.f, 0.f));
+		auto view       = glm::lookAt(glm::vec3(0.f, 1.5f, -2.5f),
+		                              glm::vec3(0.f, 0.f, 0.f),
+		                              glm::vec3(0.f, 1.f, 0.f));
 
 		return projection * view;
 	}
