@@ -383,8 +383,10 @@ namespace frame
 
 		sdl_gpu_buffer_ptr vertex_buffer;
 		sdl_gpu_buffer_ptr index_buffer;
+		sdl_gpu_buffer_ptr instance_buffer;
 		uint32_t vertex_count;
 		uint32_t index_count;
+		uint32_t instance_count;
 
 		sdl_gpu_texture_ptr grid_texture;
 		std::array<sdl_gpu_sampler_ptr, 6> samplers;
@@ -439,7 +441,7 @@ namespace frame
 
 		msg::info("Creating Pipelines.");
 
-		auto vs_bin = io::read_file("shaders/textured_mesh.vs_6_4.cso");
+		auto vs_bin = io::read_file("shaders/instanced_mesh.vs_6_4.cso");
 		auto fs_bin = io::read_file("shaders/textured_quad.ps_6_4.cso");
 
 		auto vs_shdr = load_gpu_shader(ctx, vs_bin, SDL_GPU_SHADERSTAGE_VERTEX, 0, 1, 0, 0);
@@ -452,9 +454,21 @@ namespace frame
 			.instance_step_rate = 0,
 		};
 
+		auto instance_description = SDL_GPUVertexBufferDescription{
+			.slot               = 1,
+			.pitch              = sizeof(glm::mat4),
+			.input_rate         = SDL_GPU_VERTEXINPUTRATE_INSTANCE,
+			.instance_step_rate = 1,
+		};
+
+		auto vertex_buffer_descriptions = std::array{
+			vertex_description,
+			instance_description,
+		};
+
 		auto vertex_input = SDL_GPUVertexInputState{
-			.vertex_buffer_descriptions = &vertex_description,
-			.num_vertex_buffers         = 1,
+			.vertex_buffer_descriptions = vertex_buffer_descriptions.data(),
+			.num_vertex_buffers         = static_cast<uint32_t>(vertex_buffer_descriptions.size()),
 			.vertex_attributes          = vertex_attributes.data(),
 			.num_vertex_attributes      = static_cast<uint32_t>(vertex_attributes.size()),
 		};
@@ -581,6 +595,21 @@ namespace frame
 		SDL_EndGPUCopyPass(copypass);
 		SDL_SubmitGPUCommandBuffer(copy_cmd);
 		SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
+	}
+
+	void create_instance_buffer(const base::sdl_context &ctx, uint32_t instance_buffer_size, frame_context &rndr)
+	{
+		auto device = ctx.gpu.get();
+
+		msg::info("Create Instance Buffer.");
+
+		auto ib_info = SDL_GPUBufferCreateInfo{
+			.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+			.size  = instance_buffer_size,
+		};
+		auto instance_buffer = SDL_CreateGPUBuffer(device, &ib_info);
+		msg::error(instance_buffer != nullptr, "Failed to create instance buffer.");
+		rndr.instance_buffer = sdl_gpu_buffer_ptr(instance_buffer, sdl_free_buffer{ device });
 	}
 
 	void create_depth_texture(const base::sdl_context &ctx, frame_context &rndr)
@@ -747,13 +776,50 @@ namespace frame
 										  .max_anisotropy    = 4,
 										  .enable_anisotropy = true,
 										});
+	void update_instance_buffer(const base::sdl_context &ctx, const io::byte_span instances, frame_context &rndr)
+	{
+		auto device = ctx.gpu.get();
+
+		msg::info("Update instance buffer");
+
+		auto ib_size = static_cast<uint32_t>(instances.size());
+
+		auto tb_info = SDL_GPUTransferBufferCreateInfo{
+			.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+			.size  = ib_size,
+		};
+		auto transfer_buffer = SDL_CreateGPUTransferBuffer(device, &tb_info);
+		msg::error(transfer_buffer != nullptr, "Failed to create transfer buffer for instance data.");
+
+		auto *data = SDL_MapGPUTransferBuffer(device, transfer_buffer, false);
+		std::memcpy(data, instances.data(), ib_size);
+		SDL_UnmapGPUTransferBuffer(device, transfer_buffer);
+
+		auto copy_cmd = SDL_AcquireGPUCommandBuffer(device);
+		auto copypass = SDL_BeginGPUCopyPass(copy_cmd);
+
+		auto src = SDL_GPUTransferBufferLocation{
+			.transfer_buffer = transfer_buffer,
+			.offset          = 0,
+		};
+		auto dst = SDL_GPUBufferRegion{
+			.buffer = rndr.instance_buffer.get(),
+			.offset = 0,
+			.size   = ib_size,
+		};
+		SDL_UploadToGPUBuffer(copypass, &src, &dst, false);
+
+		SDL_EndGPUCopyPass(copypass);
+		SDL_SubmitGPUCommandBuffer(copy_cmd);
+		SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
 	}
 
 	// Initialize all Frame objects
 	auto init(const base::sdl_context &ctx,
 	          const io::byte_span vertices,
 	          const io::byte_span indicies,
-	          uint32_t vertex_count, uint32_t index_count,
+	          const io::byte_span instances,
+	          uint32_t vertex_count, uint32_t index_count, uint32_t instance_count,
 	          const std::span<const SDL_GPUVertexAttribute> vertex_attributes,
 	          const io::image_data &texture_image,
 	          const io::byte_span &view_proj) -> frame_context
@@ -761,16 +827,20 @@ namespace frame
 		msg::info("Initialize frame objects");
 
 		auto rndr = frame_context{
-			.vertex_count = vertex_count,
-			.index_count  = index_count,
-			.view_proj    = view_proj,
+			.vertex_count   = vertex_count,
+			.index_count    = index_count,
+			.instance_count = instance_count,
+			.view_proj      = view_proj,
 		};
 
 		create_pipelines(ctx, static_cast<uint32_t>(vertices.size() / vertex_count), vertex_attributes, rndr);
 		create_and_copy_vertices_indicies(ctx, vertices, indicies, rndr);
+		create_instance_buffer(ctx, static_cast<uint32_t>(instances.size()), rndr);
 		create_and_load_texture(ctx, texture_image, rndr);
 		create_depth_texture(ctx, rndr);
 		create_samplers(ctx, rndr);
+
+		update_instance_buffer(ctx, instances, rndr);
 
 		return rndr;
 	}
@@ -830,11 +900,17 @@ namespace frame
 
 		SDL_PushGPUVertexUniformData(cmd_buf, 0, rndr.view_proj.data(), static_cast<uint32_t>(rndr.view_proj.size()));
 
-		auto vertex_bindings = SDL_GPUBufferBinding{
-			.buffer = rndr.vertex_buffer.get(),
-			.offset = 0,
+		auto vertex_bindings = std::array{
+			SDL_GPUBufferBinding{
+			  .buffer = rndr.vertex_buffer.get(),
+			  .offset = 0,
+			},
+			SDL_GPUBufferBinding{
+			  .buffer = rndr.instance_buffer.get(),
+			  .offset = 0,
+			},
 		};
-		SDL_BindGPUVertexBuffers(renderpass, 0, &vertex_bindings, 1);
+		SDL_BindGPUVertexBuffers(renderpass, 0, vertex_bindings.data(), static_cast<uint32_t>(vertex_bindings.size()));
 
 		auto index_bindings = SDL_GPUBufferBinding{
 			.buffer = rndr.index_buffer.get(),
@@ -851,7 +927,7 @@ namespace frame
 		SDL_BindGPUGraphicsPipeline(renderpass, rndr.pipeline.get());
 		SDL_DrawGPUIndexedPrimitives(renderpass,
 		                             rndr.index_count,
-		                             1,
+		                             rndr.instance_count,
 		                             0,
 		                             0,
 		                             0);
@@ -871,55 +947,11 @@ namespace app
 	{
 		glm::vec3 pos;
 		glm::vec2 uv;
-
-		constexpr static auto vertex_attributes = std::array{
-			SDL_GPUVertexAttribute{
-			  .location    = 0,
-			  .buffer_slot = 0,
-			  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
-			  .offset      = 0,
-			},
-			SDL_GPUVertexAttribute{
-			  .location    = 1,
-			  .buffer_slot = 0,
-			  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-			  .offset      = sizeof(float) * 3,
-			}
-		};
 	};
-
-	void update(frame::frame_context &rndr)
+	struct instance_data
 	{
-		auto *key_states = SDL_GetKeyboardState(NULL);
-
-		auto prv = rndr.active_sampler;
-
-		if (key_states[SDL_SCANCODE_1])
-			rndr.active_sampler = 0;
-		else if (key_states[SDL_SCANCODE_2])
-			rndr.active_sampler = 1;
-		else if (key_states[SDL_SCANCODE_3])
-			rndr.active_sampler = 2;
-		else if (key_states[SDL_SCANCODE_4])
-			rndr.active_sampler = 3;
-		else if (key_states[SDL_SCANCODE_5])
-			rndr.active_sampler = 4;
-		else if (key_states[SDL_SCANCODE_6])
-			rndr.active_sampler = 5;
-
-		if (prv != rndr.active_sampler)
-		{
-			constexpr auto sampler_name = std::array{
-				"Point Clamp"sv,
-				"Point Wrap"sv,
-				"Linear Clamp"sv,
-				"Linear Wrap"sv,
-				"Anisotropic Clamp"sv,
-				"Anisotropic Wrap"sv,
-			};
-			msg::info(std::format("Change sampler to {}", sampler_name.at(rndr.active_sampler)));
-		}
-	}
+		glm::mat4 transform;
+	};
 
 	struct mesh
 	{
@@ -927,7 +959,7 @@ namespace app
 		std::vector<uint32_t> indices;
 	};
 
-	constexpr auto make_cube() -> mesh
+	auto make_cube() -> mesh
 	{
 		auto vertices = std::vector<pos_uv_vertex>{
 			// +X face
@@ -982,6 +1014,19 @@ namespace app
 		};
 	}
 
+	auto get_cube_instances() -> std::vector<instance_data>
+	{
+		auto cube_1 = glm::translate(glm::mat4(1.f), glm::vec3{ 2.f, 0.f, 0.f });
+
+		auto cube_2 = glm::translate(glm::mat4(1.0f), glm::vec3{ -2.f, 0.f, 0.f });
+		cube_2      = glm::rotate(cube_2, glm::radians(45.0f), glm::vec3{ 0.f, 0.f, 1.f });
+
+		return {
+			{ cube_1 },
+			{ cube_2 },
+		};
+	}
+
 	auto get_projection(uint32_t width, uint32_t height) -> glm::mat4
 	{
 		auto fov          = glm::radians(90.0f);
@@ -995,6 +1040,78 @@ namespace app
 
 		return projection * view;
 	}
+
+	constexpr static auto vertex_attributes = std::array{
+		SDL_GPUVertexAttribute{
+		  .location    = 0,
+		  .buffer_slot = 0,
+		  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+		  .offset      = 0,
+		},
+		SDL_GPUVertexAttribute{
+		  .location    = 1,
+		  .buffer_slot = 0,
+		  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+		  .offset      = sizeof(glm::vec3),
+		},
+		SDL_GPUVertexAttribute{
+		  .location    = 2,
+		  .buffer_slot = 1,
+		  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+		  .offset      = 0,
+		},
+		SDL_GPUVertexAttribute{
+		  .location    = 3,
+		  .buffer_slot = 1,
+		  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+		  .offset      = sizeof(glm::vec4),
+		},
+		SDL_GPUVertexAttribute{
+		  .location    = 4,
+		  .buffer_slot = 1,
+		  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+		  .offset      = sizeof(glm::vec4) * 2,
+		},
+		SDL_GPUVertexAttribute{
+		  .location    = 5,
+		  .buffer_slot = 1,
+		  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+		  .offset      = sizeof(glm::vec4) * 3,
+		},
+	};
+
+	void update(frame::frame_context &rndr)
+	{
+		auto *key_states = SDL_GetKeyboardState(NULL);
+
+		auto prv = rndr.active_sampler;
+
+		if (key_states[SDL_SCANCODE_1])
+			rndr.active_sampler = 0;
+		else if (key_states[SDL_SCANCODE_2])
+			rndr.active_sampler = 1;
+		else if (key_states[SDL_SCANCODE_3])
+			rndr.active_sampler = 2;
+		else if (key_states[SDL_SCANCODE_4])
+			rndr.active_sampler = 3;
+		else if (key_states[SDL_SCANCODE_5])
+			rndr.active_sampler = 4;
+		else if (key_states[SDL_SCANCODE_6])
+			rndr.active_sampler = 5;
+
+		if (prv != rndr.active_sampler)
+		{
+			constexpr auto sampler_name = std::array{
+				"Point Clamp"sv,
+				"Point Wrap"sv,
+				"Linear Clamp"sv,
+				"Linear Wrap"sv,
+				"Anisotropic Clamp"sv,
+				"Anisotropic Wrap"sv,
+			};
+			msg::info(std::format("Change sampler to {}", sampler_name.at(rndr.active_sampler)));
+		}
+	}
 }
 
 auto main() -> int
@@ -1005,19 +1122,22 @@ auto main() -> int
 
 	auto ctx = base::init(window_width, window_height, app_title);
 
-	auto shape     = app::make_cube();
-	auto view_proj = app::get_projection(window_width, window_height);
+	auto shape           = app::make_cube();
+	auto shape_instances = app::get_cube_instances();
+	auto view_proj       = app::get_projection(window_width, window_height);
 
-	auto vertex_count = static_cast<uint32_t>(shape.vertices.size());
-	auto index_count  = static_cast<uint32_t>(shape.indices.size());
+	auto vertex_count   = static_cast<uint32_t>(shape.vertices.size());
+	auto index_count    = static_cast<uint32_t>(shape.indices.size());
+	auto instance_count = static_cast<uint32_t>(shape_instances.size());
 
 	auto grid_texture = io::read_image_file("data/uv_grid.dds");
 
 	auto rndr = frame::init(ctx,
 	                        io::as_byte_span(shape.vertices),
 	                        io::as_byte_span(shape.indices),
-	                        vertex_count, index_count,
-	                        app::pos_uv_vertex::vertex_attributes,
+	                        io::as_byte_span(shape_instances),
+	                        vertex_count, index_count, instance_count,
+	                        app::vertex_attributes,
 	                        grid_texture,
 	                        io::as_byte_span(view_proj));
 
