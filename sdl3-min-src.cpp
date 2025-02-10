@@ -395,6 +395,8 @@ namespace frame
 		io::byte_span view_proj;
 	};
 
+	constexpr auto depth_texture_format = SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT;
+
 	// Create GPU side shader using in-memory shader binary for specified stage
 	auto load_gpu_shader(const base::sdl_context &ctx,
 	                     const io::byte_span &bin,
@@ -504,7 +506,7 @@ namespace frame
 			.target_info = {
 			  .color_target_descriptions = color_targets.data(),
 			  .num_color_targets         = static_cast<uint32_t>(color_targets.size()),
-			  .depth_stencil_format      = SDL_GPU_TEXTUREFORMAT_D24_UNORM,
+			  .depth_stencil_format      = depth_texture_format,
 			  .has_depth_stencil_target  = true,
 			},
 		};
@@ -623,7 +625,7 @@ namespace frame
 
 		auto texture_info = SDL_GPUTextureCreateInfo{
 			.type                 = SDL_GPU_TEXTURETYPE_2D,
-			.format               = SDL_GPU_TEXTUREFORMAT_D24_UNORM,
+			.format               = depth_texture_format,
 			.usage                = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET,
 			.width                = static_cast<uint32_t>(width),
 			.height               = static_cast<uint32_t>(height),
