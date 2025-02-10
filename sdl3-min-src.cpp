@@ -1000,19 +1000,14 @@ namespace app
 			{ { -1.f, +1.f, -1.f }, { 0.f, 0.f } },
 		};
 
-		auto face_0 = std::vector<uint32_t>{
-			0, 1, 2, //
-			0, 2, 3, //
+		auto indices = std::vector<uint32_t>{
+			0, 1, 2, 0, 2, 3,       // Front
+			4, 5, 6, 4, 6, 7,       // Bottom
+			8, 9, 10, 8, 10, 11,    // Right
+			12, 13, 14, 12, 14, 15, // Left
+			16, 17, 18, 16, 18, 19, // Back
+			20, 21, 22, 20, 22, 23, // Top
 		};
-		auto f_idxs = std::views::iota(0, 6);
-		auto f_rng  = std::views::cartesian_product(f_idxs, face_0) |
-		             std::views::transform([](const auto &&f_pair) -> uint32_t {
-			auto [f_idx, v_idx] = f_pair;
-
-			return v_idx + (f_idx * 4);
-		});
-
-		auto indices = f_rng | std::ranges::to<std::vector>();
 
 		return {
 			vertices,
