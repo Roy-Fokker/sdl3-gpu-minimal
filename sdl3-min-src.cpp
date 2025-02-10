@@ -764,7 +764,7 @@ namespace frame
 										  .address_mode_u    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
 										  .address_mode_v    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
 										  .address_mode_w    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
-										  .max_anisotropy    = 4,
+										  .max_anisotropy    = 16,
 										  .enable_anisotropy = true,
 										});
 		rndr.samplers[5] = make_sampler(device, /* Anisotropic Wrap */
@@ -775,7 +775,7 @@ namespace frame
 										  .address_mode_u    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
 										  .address_mode_v    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
 										  .address_mode_w    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
-										  .max_anisotropy    = 4,
+										  .max_anisotropy    = 16,
 										  .enable_anisotropy = true,
 										});
 
