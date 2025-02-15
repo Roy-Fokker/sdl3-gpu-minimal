@@ -1040,7 +1040,7 @@ namespace app
 		auto fov          = glm::radians(90.0f);
 		auto aspect_ratio = static_cast<float>(width) / height;
 
-		auto projection = glm::perspective(fov, aspect_ratio, 0.f, 100.f);
+		auto projection = glm::perspective(fov, aspect_ratio, 0.1f, 100.f);
 		auto view       = glm::lookAt(glm::vec3(0.f, 1.5f, -2.5f),
 		                              glm::vec3(0.f, 0.f, 0.f),
 		                              glm::vec3(0.f, 1.f, 0.f));
