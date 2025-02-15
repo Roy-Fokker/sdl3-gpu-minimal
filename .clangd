@@ -3,3 +3,6 @@ CompileFlags:
   CompilationDatabase: "./builds/windows-default"
 Index:
   StandardLibrary: Yes
+Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: None
