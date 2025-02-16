@@ -23,52 +23,6 @@ import sdl3_scene;
 using namespace std::literals;
 
 /*
- * SDL functions called every frame
- */
-namespace frame
-{
-
-	void update_instance_buffer(const sdl3::context &ctx, const io::byte_span instances, sdl3::scene &rndr)
-	{
-		auto device = ctx.gpu.get();
-
-		msg::info("Update instance buffer");
-
-		auto ib_size = static_cast<uint32_t>(instances.size());
-
-		auto tb_info = SDL_GPUTransferBufferCreateInfo{
-			.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-			.size  = ib_size,
-		};
-		auto transfer_buffer = SDL_CreateGPUTransferBuffer(device, &tb_info);
-		msg::error(transfer_buffer != nullptr, "Failed to create transfer buffer for instance data.");
-
-		auto *data = SDL_MapGPUTransferBuffer(device, transfer_buffer, false);
-		std::memcpy(data, instances.data(), ib_size);
-		SDL_UnmapGPUTransferBuffer(device, transfer_buffer);
-
-		auto copy_cmd = SDL_AcquireGPUCommandBuffer(device);
-		auto copypass = SDL_BeginGPUCopyPass(copy_cmd);
-
-		auto src = SDL_GPUTransferBufferLocation{
-			.transfer_buffer = transfer_buffer,
-			.offset          = 0,
-		};
-		auto dst = SDL_GPUBufferRegion{
-			.buffer = rndr.instance_buffer.get(),
-			.offset = 0,
-			.size   = ib_size,
-		};
-		SDL_UploadToGPUBuffer(copypass, &src, &dst, false);
-
-		SDL_EndGPUCopyPass(copypass);
-		SDL_SubmitGPUCommandBuffer(copy_cmd);
-		SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
-	}
-
-}
-
-/*
  * To manage application specific state data
  */
 namespace app
@@ -177,63 +131,63 @@ namespace app
 		};
 	}
 
-	using VA                         = SDL_GPUVertexAttribute;
-	constexpr auto VERTEX_ATTRIBUTES = std::array{
-		VA{
-		  .location    = 0,
-		  .buffer_slot = 0,
-		  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
-		  .offset      = 0,
-		},
-		VA{
-		  .location    = 1,
-		  .buffer_slot = 0,
-		  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-		  .offset      = sizeof(glm::vec3),
-		},
-		VA{
-		  .location    = 2,
-		  .buffer_slot = 1,
-		  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-		  .offset      = 0,
-		},
-		VA{
-		  .location    = 3,
-		  .buffer_slot = 1,
-		  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-		  .offset      = sizeof(glm::vec4),
-		},
-		VA{
-		  .location    = 4,
-		  .buffer_slot = 1,
-		  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-		  .offset      = sizeof(glm::vec4) * 2,
-		},
-		VA{
-		  .location    = 5,
-		  .buffer_slot = 1,
-		  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-		  .offset      = sizeof(glm::vec4) * 3,
-		},
-	};
-
-	using VBD                          = SDL_GPUVertexBufferDescription;
-	constexpr auto VERTEX_BUFFER_DESCS = std::array{
-		VBD{
-		  .slot       = 0,
-		  .pitch      = sizeof(vertex),
-		  .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
-		},
-		VBD{
-		  .slot               = 1,
-		  .pitch              = sizeof(glm::mat4),
-		  .input_rate         = SDL_GPU_VERTEXINPUTRATE_INSTANCE,
-		  .instance_step_rate = 1,
-		},
-	};
-
 	auto get_pipeline_desc() -> sdl3::pipeline_desc
 	{
+		using VA                         = SDL_GPUVertexAttribute;
+		constexpr auto VERTEX_ATTRIBUTES = std::array{
+			VA{
+			  .location    = 0,
+			  .buffer_slot = 0,
+			  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+			  .offset      = 0,
+			},
+			VA{
+			  .location    = 1,
+			  .buffer_slot = 0,
+			  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+			  .offset      = sizeof(glm::vec3),
+			},
+			VA{
+			  .location    = 2,
+			  .buffer_slot = 1,
+			  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+			  .offset      = 0,
+			},
+			VA{
+			  .location    = 3,
+			  .buffer_slot = 1,
+			  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+			  .offset      = sizeof(glm::vec4),
+			},
+			VA{
+			  .location    = 4,
+			  .buffer_slot = 1,
+			  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+			  .offset      = sizeof(glm::vec4) * 2,
+			},
+			VA{
+			  .location    = 5,
+			  .buffer_slot = 1,
+			  .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+			  .offset      = sizeof(glm::vec4) * 3,
+			},
+		};
+
+		using VBD                          = SDL_GPUVertexBufferDescription;
+		constexpr auto VERTEX_BUFFER_DESCS = std::array{
+			VBD{
+			  .slot       = 0,
+			  .pitch      = sizeof(vertex),
+			  .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+			},
+			VBD{
+			  .slot               = 1,
+			  .pitch              = sizeof(glm::mat4),
+			  .input_rate         = SDL_GPU_VERTEXINPUTRATE_INSTANCE,
+			  .instance_step_rate = 1,
+			},
+		};
+
 		auto vs_bin = io::read_file("shaders/instanced_mesh.vs_6_4.cso");
 		auto fs_bin = io::read_file("shaders/textured_quad.ps_6_4.cso");
 

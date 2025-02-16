@@ -589,3 +589,49 @@ export namespace sdl3
 		SDL_SubmitGPUCommandBuffer(cmd_buf);
 	}
 }
+
+/*
+ * SDL functions called every frame
+ */
+namespace frame
+{
+
+	void update_instance_buffer(const sdl3::context &ctx, const io::byte_span instances, sdl3::scene &rndr)
+	{
+		auto device = ctx.gpu.get();
+
+		msg::info("Update instance buffer");
+
+		auto ib_size = static_cast<uint32_t>(instances.size());
+
+		auto tb_info = SDL_GPUTransferBufferCreateInfo{
+			.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+			.size  = ib_size,
+		};
+		auto transfer_buffer = SDL_CreateGPUTransferBuffer(device, &tb_info);
+		msg::error(transfer_buffer != nullptr, "Failed to create transfer buffer for instance data.");
+
+		auto *data = SDL_MapGPUTransferBuffer(device, transfer_buffer, false);
+		std::memcpy(data, instances.data(), ib_size);
+		SDL_UnmapGPUTransferBuffer(device, transfer_buffer);
+
+		auto copy_cmd = SDL_AcquireGPUCommandBuffer(device);
+		auto copypass = SDL_BeginGPUCopyPass(copy_cmd);
+
+		auto src = SDL_GPUTransferBufferLocation{
+			.transfer_buffer = transfer_buffer,
+			.offset          = 0,
+		};
+		auto dst = SDL_GPUBufferRegion{
+			.buffer = rndr.instance_buffer.get(),
+			.offset = 0,
+			.size   = ib_size,
+		};
+		SDL_UploadToGPUBuffer(copypass, &src, &dst, false);
+
+		SDL_EndGPUCopyPass(copypass);
+		SDL_SubmitGPUCommandBuffer(copy_cmd);
+		SDL_ReleaseGPUTransferBuffer(device, transfer_buffer);
+	}
+
+}
