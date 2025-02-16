@@ -45,9 +45,9 @@ namespace app
 			angle = 0.0f;
 
 		if (key_states[SDL_SCANCODE_W] or key_states[SDL_SCANCODE_UP])
-			cam_y += 0.5f;
+			cam_y += 0.1f;
 		if (key_states[SDL_SCANCODE_S] or key_states[SDL_SCANCODE_DOWN])
-			cam_y -= 0.5f;
+			cam_y -= 0.1f;
 	}
 
 	struct vertex
@@ -214,6 +214,7 @@ namespace app
 			  .vertex_attributes          = VERTEX_ATTRIBUTES,
 			  .vertex_buffer_descriptions = VERTEX_BUFFER_DESCS,
 			  .depth_test                 = true,
+			  .cull_mode                  = sdl3::cull_mode_t::back_ccw,
 			},
 			{
 			  .vertex = sdl3::shader_desc{
@@ -222,9 +223,9 @@ namespace app
 				.uniform_buffer_count = 1,
 			  },
 			  .fragment = sdl3::shader_desc{
-				.shader_binary = grid_fs_bin,
-				.stage         = SDL_GPU_SHADERSTAGE_FRAGMENT,
-				.sampler_count = 1,
+				.shader_binary        = grid_fs_bin,
+				.stage                = SDL_GPU_SHADERSTAGE_FRAGMENT,
+				.uniform_buffer_count = 1,
 			  },
 			  .depth_test = true,
 			  .cull_mode  = sdl3::cull_mode_t::none,
