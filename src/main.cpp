@@ -36,9 +36,9 @@ namespace app
 		if (key_states[SDL_SCANCODE_ESCAPE])
 			quit = true;
 
-		if (key_states[SDL_SCANCODE_A])
+		if (key_states[SDL_SCANCODE_A] or key_states[SDL_SCANCODE_LEFT])
 			angle -= 0.5f;
-		if (key_states[SDL_SCANCODE_D])
+		if (key_states[SDL_SCANCODE_D] or key_states[SDL_SCANCODE_RIGHT])
 			angle += 0.5f;
 
 		if (angle >= 360.0f or angle <= -360.0f)
