@@ -170,9 +170,20 @@ export namespace sdl3
 			};
 		}
 
+		auto blend_state = SDL_GPUColorTargetBlendState{
+			.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+			.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+			.color_blend_op        = SDL_GPU_BLENDOP_ADD,
+			.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
+			.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO,
+			.alpha_blend_op        = SDL_GPU_BLENDOP_ADD,
+			.enable_blend          = true,
+		};
+
 		auto color_targets = std::array{
 			SDL_GPUColorTargetDescription{
-			  .format = SDL_GetGPUSwapchainTextureFormat(gpu, wnd),
+			  .format      = SDL_GetGPUSwapchainTextureFormat(gpu, wnd),
+			  .blend_state = blend_state,
 			},
 		};
 
