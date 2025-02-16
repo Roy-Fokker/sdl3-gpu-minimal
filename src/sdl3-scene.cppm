@@ -82,6 +82,15 @@ export namespace sdl3
 		return { shader, { gpu } };
 	}
 
+	enum class cull_mode_t
+	{
+		none,
+		front_ccw,
+		back_ccw,
+		front_cw,
+		back_cw,
+	};
+
 	struct pipeline_desc
 	{
 		shader_desc vertex;
@@ -91,6 +100,7 @@ export namespace sdl3
 		std::span<const SDL_GPUVertexBufferDescription> vertex_buffer_descriptions;
 
 		bool depth_test;
+		cull_mode_t cull_mode = cull_mode_t::back_ccw;
 	};
 
 	auto make_gfx_pipeline(const context &ctx, const pipeline_desc &desc) -> gfx_pipeline_ptr
@@ -110,11 +120,43 @@ export namespace sdl3
 			.num_vertex_attributes      = static_cast<uint32_t>(desc.vertex_attributes.size()),
 		};
 
-		auto rasterizer_state = SDL_GPURasterizerState{
-			.fill_mode  = SDL_GPU_FILLMODE_FILL,
-			.cull_mode  = SDL_GPU_CULLMODE_BACK,
-			.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
-		};
+		auto rasterizer_state = [&]() -> SDL_GPURasterizerState {
+			switch (desc.cull_mode)
+			{
+				using cm = cull_mode_t;
+			case cm::none:
+				return {
+					.fill_mode = SDL_GPU_FILLMODE_FILL,
+					.cull_mode = SDL_GPU_CULLMODE_NONE,
+				};
+			case cm::front_ccw:
+				return {
+					.fill_mode  = SDL_GPU_FILLMODE_FILL,
+					.cull_mode  = SDL_GPU_CULLMODE_FRONT,
+					.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE
+				};
+			case cm::back_ccw:
+				return {
+					.fill_mode  = SDL_GPU_FILLMODE_FILL,
+					.cull_mode  = SDL_GPU_CULLMODE_BACK,
+					.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE
+				};
+			case cm::front_cw:
+				return {
+					.fill_mode  = SDL_GPU_FILLMODE_FILL,
+					.cull_mode  = SDL_GPU_CULLMODE_FRONT,
+					.front_face = SDL_GPU_FRONTFACE_CLOCKWISE
+				};
+			case cm::back_cw:
+				return {
+					.fill_mode  = SDL_GPU_FILLMODE_FILL,
+					.cull_mode  = SDL_GPU_CULLMODE_BACK,
+					.front_face = SDL_GPU_FRONTFACE_CLOCKWISE
+				};
+			}
+			msg::error(false, "Unhandled Cull Mode case.");
+			return {};
+		}();
 
 		auto depth_stencil_state = SDL_GPUDepthStencilState{};
 		if (desc.depth_test)
@@ -325,7 +367,7 @@ export namespace sdl3
 	{
 		SDL_FColor clear_color;
 
-		gfx_pipeline_ptr pipeline;
+		std::vector<gfx_pipeline_ptr> pipelines;
 
 		gpu_buffer_ptr vertex_buffer;
 		gpu_buffer_ptr index_buffer;
@@ -448,7 +490,7 @@ export namespace sdl3
 	}
 
 	auto init_scene(const context &ctx,
-	                const pipeline_desc &pipeline,
+	                const std::span<const pipeline_desc> pipelines,
 	                const io::byte_span vertices, uint32_t vertex_count,
 	                const io::byte_span indices, uint32_t index_count,
 	                const io::byte_span instances, uint32_t instance_count,
@@ -466,7 +508,9 @@ export namespace sdl3
 			.instance_count = instance_count,
 		};
 
-		scn.pipeline        = make_gfx_pipeline(ctx, pipeline);
+		std::ranges::transform(pipelines, std::back_inserter(scn.pipelines), [&](const auto &pipeline) {
+			return make_gfx_pipeline(ctx, pipeline);
+		});
 		scn.vertex_buffer   = make_buffer(gpu, SDL_GPU_BUFFERUSAGE_VERTEX, static_cast<uint32_t>(vertices.size()), "Vertex Buffer"sv);
 		scn.index_buffer    = make_buffer(gpu, SDL_GPU_BUFFERUSAGE_INDEX, static_cast<uint32_t>(indices.size()), "Index Buffer"sv);
 		scn.instance_buffer = make_buffer(gpu, SDL_GPU_BUFFERUSAGE_VERTEX, static_cast<uint32_t>(instances.size()), "Instance Buffer"sv);
@@ -579,10 +623,17 @@ export namespace sdl3
 			SDL_BindGPUFragmentSamplers(render_pass, 0, &sampler_binding, 1);
 
 			// Graphics Pipeline
-			SDL_BindGPUGraphicsPipeline(render_pass, scn.pipeline.get());
+			SDL_BindGPUGraphicsPipeline(render_pass, scn.pipelines.at(0).get());
 
 			// Draw Indexed
 			SDL_DrawGPUIndexedPrimitives(render_pass, scn.index_count, scn.instance_count, 0, 0, 0);
+
+			// For Grid Plan -----------------------------------------------------------------------------------------------------------------------
+			// Graphics Pipeline
+			SDL_BindGPUGraphicsPipeline(render_pass, scn.pipelines.at(1).get());
+
+			// Draw Indexed
+			SDL_DrawGPUPrimitives(render_pass, 6, 1, 0, 0);
 		}
 		SDL_EndGPURenderPass(render_pass);
 

@@ -59,7 +59,7 @@ namespace app
 
 	auto make_cube() -> mesh
 	{
-		auto x = 1.f, y = 1.f, z = 1.f;
+		auto x = 0.5f, y = 0.5f, z = 0.5f;
 
 		auto vertices = std::vector<vertex>{
 			// +X face
@@ -131,7 +131,7 @@ namespace app
 		};
 	}
 
-	auto get_pipeline_desc() -> sdl3::pipeline_desc
+	auto get_pipeline_desc() -> std::vector<sdl3::pipeline_desc>
 	{
 		using VA                                = SDL_GPUVertexAttribute;
 		constexpr static auto VERTEX_ATTRIBUTES = std::array{
@@ -191,20 +191,39 @@ namespace app
 		auto vs_bin = io::read_file("shaders/instanced_mesh.vs_6_4.cso");
 		auto fs_bin = io::read_file("shaders/textured_quad.ps_6_4.cso");
 
+		auto grid_vs_bin = io::read_file("shaders/grid.vs_6_4.cso");
+		auto grid_fs_bin = io::read_file("shaders/grid.ps_6_4.cso");
+
 		return {
-			.vertex = sdl3::shader_desc{
-			  .shader_binary        = vs_bin,
-			  .stage                = SDL_GPU_SHADERSTAGE_VERTEX,
-			  .uniform_buffer_count = 1,
+			{
+			  .vertex = sdl3::shader_desc{
+				.shader_binary        = vs_bin,
+				.stage                = SDL_GPU_SHADERSTAGE_VERTEX,
+				.uniform_buffer_count = 1,
+			  },
+			  .fragment = sdl3::shader_desc{
+				.shader_binary = fs_bin,
+				.stage         = SDL_GPU_SHADERSTAGE_FRAGMENT,
+				.sampler_count = 1,
+			  },
+			  .vertex_attributes          = VERTEX_ATTRIBUTES,
+			  .vertex_buffer_descriptions = VERTEX_BUFFER_DESCS,
+			  .depth_test                 = true,
 			},
-			.fragment = sdl3::shader_desc{
-			  .shader_binary = fs_bin,
-			  .stage         = SDL_GPU_SHADERSTAGE_FRAGMENT,
-			  .sampler_count = 1,
+			{
+			  .vertex = sdl3::shader_desc{
+				.shader_binary        = grid_vs_bin,
+				.stage                = SDL_GPU_SHADERSTAGE_VERTEX,
+				.uniform_buffer_count = 1,
+			  },
+			  .fragment = sdl3::shader_desc{
+				.shader_binary = grid_fs_bin,
+				.stage         = SDL_GPU_SHADERSTAGE_FRAGMENT,
+				.sampler_count = 1,
+			  },
+			  .depth_test = true,
+			  .cull_mode  = sdl3::cull_mode_t::none,
 			},
-			.vertex_attributes          = VERTEX_ATTRIBUTES,
-			.vertex_buffer_descriptions = VERTEX_BUFFER_DESCS,
-			.depth_test                 = true,
 		};
 	}
 
@@ -213,23 +232,27 @@ namespace app
 		return io::read_image_file("data/uv_grid.dds");
 	}
 
-	auto get_projection(uint32_t width, uint32_t height, float angle) -> glm::mat4
+	auto get_projection(uint32_t width, uint32_t height, float angle) -> std::array<glm::mat4, 2>
 	{
 		auto fov          = glm::radians(90.0f);
 		auto aspect_ratio = static_cast<float>(width) / height;
 
 		auto x = std::cosf(angle);
+		auto y = 0; // 1.5f;
 		auto z = std::sinf(angle);
 
 		x = x * 2.5f;
 		z = z * 2.5f;
 
 		auto projection = glm::perspective(fov, aspect_ratio, 0.1f, 100.f);
-		auto view       = glm::lookAt(glm::vec3(x, 1.5, z),
+		auto view       = glm::lookAt(glm::vec3(x, y, z),
 		                              glm::vec3(0.f, 0.f, 0.f),
 		                              glm::vec3(0.f, 1.f, 0.f));
 
-		return projection * view;
+		return {
+			projection,
+			view,
+		};
 	}
 }
 
@@ -245,12 +268,12 @@ auto main() -> int
 	auto texture        = app::load_texture();
 	auto cube_mesh      = app::make_cube();
 	auto cube_instances = app::make_cube_instances();
-	auto pl_desc        = app::get_pipeline_desc();
+	auto pl_descs       = app::get_pipeline_desc();
 
 	auto ctx = sdl3::init_context(width, height, app_title);
 	auto scn = sdl3::init_scene(
 		ctx,
-		pl_desc,
+		pl_descs,
 		io::as_byte_span(cube_mesh.vertices), static_cast<uint32_t>(cube_mesh.vertices.size()),
 		io::as_byte_span(cube_mesh.indices), static_cast<uint32_t>(cube_mesh.indices.size()),
 		io::as_byte_span(cube_instances.transforms), static_cast<uint32_t>(cube_instances.transforms.size()),

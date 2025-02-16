@@ -15,7 +15,8 @@ struct Output
 
 struct FrameBuffer
 {
-	float4x4 mvp;
+	float4x4 projection;
+	float4x4 view;
 };
 
 ConstantBuffer<FrameBuffer> ubo : register(b0, space1);
@@ -26,7 +27,7 @@ Output main(Input input)
 	output.TexCoord = input.TexCoord;
 
 	float4 pos = float4(input.Position, 1.0f);
-	output.Position = mul(ubo.mvp, mul(input.Transform, pos));
+	output.Position = mul(ubo.projection, mul(ubo.view, mul(input.Transform, pos)));
 
 	return output;
 }
