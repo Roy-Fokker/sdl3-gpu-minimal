@@ -133,8 +133,8 @@ namespace app
 
 	auto get_pipeline_desc() -> sdl3::pipeline_desc
 	{
-		using VA                         = SDL_GPUVertexAttribute;
-		constexpr auto VERTEX_ATTRIBUTES = std::array{
+		using VA                                = SDL_GPUVertexAttribute;
+		constexpr static auto VERTEX_ATTRIBUTES = std::array{
 			VA{
 			  .location    = 0,
 			  .buffer_slot = 0,
@@ -173,8 +173,8 @@ namespace app
 			},
 		};
 
-		using VBD                          = SDL_GPUVertexBufferDescription;
-		constexpr auto VERTEX_BUFFER_DESCS = std::array{
+		using VBD                                 = SDL_GPUVertexBufferDescription;
+		constexpr static auto VERTEX_BUFFER_DESCS = std::array{
 			VBD{
 			  .slot       = 0,
 			  .pitch      = sizeof(vertex),

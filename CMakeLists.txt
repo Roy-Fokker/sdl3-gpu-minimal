@@ -183,6 +183,7 @@ target_sources(${PRJ_APP_NAME}
 	# Non C++ module source files
 	PRIVATE
 		src/main.cpp
+	# C++ module source files
 	PRIVATE FILE_SET app_modules TYPE CXX_MODULES FILES
 		src/logs.cppm
 		src/io.cppm
