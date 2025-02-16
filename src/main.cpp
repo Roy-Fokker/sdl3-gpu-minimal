@@ -29,7 +29,7 @@ namespace app
 {
 	auto quit = false;
 
-	void update(float &angle)
+	void update(float &angle, float &cam_y)
 	{
 		auto *key_states = SDL_GetKeyboardState(nullptr);
 
@@ -43,6 +43,11 @@ namespace app
 
 		if (angle >= 360.0f or angle <= -360.0f)
 			angle = 0.0f;
+
+		if (key_states[SDL_SCANCODE_W] or key_states[SDL_SCANCODE_UP])
+			cam_y += 0.5f;
+		if (key_states[SDL_SCANCODE_S] or key_states[SDL_SCANCODE_DOWN])
+			cam_y -= 0.5f;
 	}
 
 	struct vertex
@@ -232,13 +237,13 @@ namespace app
 		return io::read_image_file("data/uv_grid.dds");
 	}
 
-	auto get_projection(uint32_t width, uint32_t height, float angle) -> std::array<glm::mat4, 2>
+	auto get_projection(uint32_t width, uint32_t height, float angle, float cam_y) -> std::array<glm::mat4, 2>
 	{
 		auto fov          = glm::radians(90.0f);
 		auto aspect_ratio = static_cast<float>(width) / height;
 
 		auto x = std::cosf(angle);
-		auto y = 0; // 1.5f;
+		auto y = cam_y;
 		auto z = std::sinf(angle);
 
 		x = x * 2.5f;
@@ -263,8 +268,9 @@ auto main() -> int
 	constexpr auto height    = 1080;
 
 	auto angle = 0.f;
+	auto cam_y = 0.f;
 
-	auto view_proj      = app::get_projection(width, height, glm::radians(angle));
+	auto view_proj      = app::get_projection(width, height, glm::radians(angle), cam_y);
 	auto texture        = app::load_texture();
 	auto cube_mesh      = app::make_cube();
 	auto cube_instances = app::make_cube_instances();
@@ -292,9 +298,9 @@ auto main() -> int
 			}
 		}
 		sdl3::draw(ctx, scn, io::as_byte_span(view_proj));
-		app::update(angle);
+		app::update(angle, cam_y);
 
-		view_proj = app::get_projection(width, height, glm::radians(angle));
+		view_proj = app::get_projection(width, height, glm::radians(angle), cam_y);
 	}
 
 	sdl3::destroy_scene(scn);
