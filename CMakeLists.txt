@@ -182,7 +182,12 @@ target_compile_definitions(${PRJ_APP_NAME}
 target_sources(${PRJ_APP_NAME}
 	# Non C++ module source files
 	PRIVATE
-		sdl3-min-src.cpp
+		src/main.cpp
+	PRIVATE FILE_SET app_modules TYPE CXX_MODULES FILES
+		src/logs.cppm
+		src/io.cppm
+		src/sdl3-init.cppm
+		src/sdl3-scene.cppm
 )
 
 # libraries used by this application
@@ -206,7 +211,7 @@ target_hlsl_sources(${PRJ_APP_NAME}
 
 # Data files/Assets used by this application
 target_data_assets(${PRJ_APP_NAME}
-	uv_grid.dds
+	textures/uv_grid.dds
 )
 
 #---------------------------------------------------------------------------------------

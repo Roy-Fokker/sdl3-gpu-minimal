@@ -5,7 +5,16 @@ Learning how to use new SDL3-GPU features with C++.
 
 ## Project Setup
 Uses `CMake` with `presets` and `C++23` with `std modules`. `Ninja` is build tool.
-All the code is in `sdl3-min-src.cpp`.
+- All the C++ code is in `src` folder.
+  - `.cppm` files are C++ Module files.
+  - `main` function is in `main.cpp`, this file also contains application state.
+  - `colors.cppm` contains some static variables to print with ANSI colors to terminal
+  - `io.cppm` contains file operations, reading shaders, and textures, as well as, making std::span from memory location.
+  - `sdl3-init.cppm` contains logic to initialize SDL3 GPU.
+  - `sdl3-scene.cppm` contains per-frame logic for drawing using SDL3 GPU API.
+- Shaders, written in HLSL 6.4, are in `shaders` folder.
+- Textures, in DDS format, are in `textures` folder.
+
 External dependencies are managed via `vcpkg`. `SDL3` is consumed as an dependency via vcpkg.
 `.clang-tidy` and `.clang-format` to maintain code formatting rules.
 `.clangd` to experiment with using clangd as lsp, it doesn't like modules.
@@ -13,7 +22,10 @@ External dependencies are managed via `vcpkg`. `SDL3` is consumed as an dependen
 Project uses `CMakePresets` json file to control platform some specific compiler configuration.
 As well as build (`ninja`) and external dependency (`vcpkg`) configuration.
 
+Primary CMake file is in project root called `CMakeLists.txt`. There is only one of these.
+
 Windows only for the moment, but it shouldn't have issues compiling on linux with **some** tweaks. e.g. adding Linux build presets.
+
 
 ### Shader Compilation
 CMake script uses a custom function to take list of shader source files and output compiled bytecode to `bin/shaders` directory. It also makes shader bytecode output a dependency of the application. 
@@ -59,6 +71,10 @@ Each tag, modifies previous tag's sources.
 - [Instance Shapes](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/6-instance-shapes): Slight tweak of previous, simple change to vertex shader and increase instance count in cpp.
 - [Basic Texture](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/7-basic-texture): Load a texture with mipmaps and use it with previous. Change Sampler type with key 1-6.
 - [Instanced Cubes with depth testing](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/8-instanced-cubes): Draw multiple textured cubes with perspective projection, with depth buffer testing.
+
+At this point code is refactored to move some of basic complexity out.
+- [Refactored Code](#): Same visually as before, but code is refactored into multiple files.
+- [Shader Grid](#): Draw a grid using shaders.
 
 ## References
 - <https://github.com/TheSpydog/SDL_gpu_examples> : my code is basically following this repo as example/source. But without "framework" portion so I can understand it better.
