@@ -58,6 +58,12 @@ function(target_hlsl_sources TARGET)
 	set(shader_files "")
 	set(shader_sources "")
 
+	# Are we in debug mode?
+	string(TOLOWER ${CMAKE_BUILD_TYPE} compile_mode)
+	if (${compile_mode} STREQUAL "debug")
+		list(APPEND shader_pdb_options /Zi /Fd ${CMAKE_PDB_OUTPUT_DIRECTORY}/)
+	endif()
+
 	# Loop through all the pairs for filename:profile provided
 	foreach(i RANGE 1 ${count_HLSL})
 		math(EXPR fni "(${i}-1)*3")              # filename index
@@ -90,7 +96,7 @@ function(target_hlsl_sources TARGET)
 		add_custom_command(
 			OUTPUT ${output}
 			COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_dir}
-			COMMAND ${DXC} -E main -Fo ${output} -T ${hlsl_profile} ${source_abs}
+			COMMAND ${DXC} -E main -Fo ${output} -T ${hlsl_profile} ${source_abs} ${shader_pdb_options}
 			DEPENDS ${source_abs}
 			COMMENT "DXC Compiling SPIRV: ${hlsl_filename} -> ${output}"
 			VERBATIM
