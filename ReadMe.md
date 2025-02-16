@@ -72,8 +72,8 @@ Each tag, modifies previous tag's sources.
 - [Basic Texture](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/7-basic-texture): Load a texture with mipmaps and use it with previous. Change Sampler type with key 1-6.
 - [Instanced Cubes with depth testing](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/8-instanced-cubes): Draw multiple textured cubes with perspective projection, with depth buffer testing.
 
-At this point code is refactored to move some of basic complexity out.
-- [Refactored Code](#): Same visually as before, but code is refactored into multiple files.
+At this point code is refactored to move some of basic complexity out, per project setup block above.
+- [Refactored Code](https://github.com/Roy-Fokker/sdl3-gpu-minimal/tree/9-refactored): Same visually as before, but code is refactored into multiple files.
 - [Shader Grid](#): Draw a grid using shaders.
 
 ## References
