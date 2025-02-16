@@ -78,3 +78,4 @@ At this point code is refactored to move some of basic complexity out, per proje
 
 ## References
 - <https://github.com/TheSpydog/SDL_gpu_examples> : my code is basically following this repo as example/source. But without "framework" portion so I can understand it better.
+- <https://asliceofrendering.com/scene%20helper/2020/01/05/InfiniteGrid/> : Grid shader article.
